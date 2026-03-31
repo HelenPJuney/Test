@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/livekit/:path*",
+      "destination": "https://bairnly-unvamped-billye.ngrok-free.dev/livekit/:path*"
+    },
+    {
+      "source": "/tts/:path*",
+      "destination": "https://bairnly-unvamped-billye.ngrok-free.dev/tts/:path*"
+    },
+    {
+      "source": "/scheduling/:path*",
+      "destination": "https://bairnly-unvamped-billye.ngrok-free.dev/scheduling/:path*"
+    }
+  ]
+}

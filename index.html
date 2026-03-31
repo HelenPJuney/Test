@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Call Test — Helen</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; }
+    header {
+      background: #1a1f2e; border-bottom: 1px solid #2d3748;
+      padding: 14px 24px; display: flex; align-items: center; gap: 12px;
+    }
+    header h1 { font-size: 1.1rem; font-weight: 600; color: #90cdf4; }
+    header span { font-size: 0.75rem; color: #718096; }
+    .backend-url { margin-left: auto; font-size: 0.72rem; color: #4a5568; font-family: monospace; }
+    .tabs { display: flex; border-bottom: 1px solid #2d3748; background: #141820; padding: 0 24px; }
+    .tab { padding: 12px 24px; cursor: pointer; font-size: 0.875rem; color: #718096; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .tab:hover { color: #90cdf4; }
+    .tab.active { color: #90cdf4; border-bottom-color: #4299e1; font-weight: 600; }
+    .panel { display: none; padding: 24px; }
+    .panel.active { display: block; }
+    .card { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 10px; padding: 20px; max-width: 540px; }
+    .card h2 { font-size: 0.95rem; color: #a0aec0; margin-bottom: 16px; font-weight: 600; }
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4a5568; margin-right: 6px; }
+    .status-dot.green  { background: #48bb78; box-shadow: 0 0 6px #48bb78; }
+    .status-dot.yellow { background: #ecc94b; box-shadow: 0 0 6px #ecc94b; }
+    .status-dot.red    { background: #fc8181; box-shadow: 0 0 6px #fc8181; }
+    .status-line { font-size: 0.82rem; color: #718096; margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
+    button { padding: 9px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: all 0.15s; }
+    .btn-primary { background: #4299e1; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #3182ce; }
+    .btn-danger  { background: #e53e3e; color: white; }
+    .btn-danger:hover:not(:disabled)  { background: #c53030; }
+    .btn-success { background: #38a169; color: white; }
+    .btn-success:hover:not(:disabled) { background: #2f855a; }
+    button:disabled { background: #2d3748 !important; color: #4a5568 !important; cursor: not-allowed; }
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .audio-viz { width: 100%; height: 48px; background: #0f1117; border-radius: 6px; margin: 12px 0; display: flex; align-items: center; justify-content: center; gap: 3px; overflow: hidden; }
+    .bar { width: 4px; background: #4299e1; border-radius: 2px; height: 4px; transition: height 0.08s; }
+    .log { background: #0f1117; border: 1px solid #2d3748; border-radius: 6px; padding: 10px; font-size: 0.72rem; font-family: monospace; max-height: 180px; overflow-y: auto; margin-top: 12px; line-height: 1.5; }
+    .log .ts  { color: #4a5568; }
+    .log .err { color: #fc8181; }
+    .log .inf { color: #90cdf4; }
+    .log .wrn { color: #ecc94b; }
+    .log .ok  { color: #68d391; }
+    .info-box { background: #0f1117; border: 1px solid #2d3748; border-radius: 6px; padding: 10px 14px; font-size: 0.8rem; margin: 10px 0; }
+    .info-box label { color: #718096; font-size: 0.7rem; display: block; }
+    .info-box .val { color: #e2e8f0; font-family: monospace; }
+    .queue-banner { display: none; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 8px; margin-top: 10px; font-size: 0.83rem; }
+    .queue-banner.show { display: flex; }
+    .queue-banner.waiting { background: #1c2f4a; border: 1px solid #4299e1; color: #90cdf4; }
+    .queue-banner.ringing { background: #1c3a2e; border: 1px solid #38a169; color: #68d391; }
+    .ring-icon { font-size: 1.3rem; animation: ring 0.5s linear infinite alternate; }
+    @keyframes ring { from { transform: rotate(-15deg); } to { transform: rotate(15deg); } }
+    .part-list { margin-top: 10px; }
+    .part-item { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: #0f1117; border-radius: 6px; margin-bottom: 4px; font-size: 0.8rem; }
+    .part-item .pname { color: #90cdf4; }
+    .part-item .ptype { color: #718096; font-size: 0.7rem; margin-left: auto; }
+    .tts-section { margin-top: 20px; border-top: 1px solid #2d3748; padding-top: 16px; }
+    .tts-section h3 { font-size: 0.82rem; color: #718096; margin-bottom: 10px; }
+    textarea { width: 100%; background: #0f1117; border: 1px solid #2d3748; border-radius: 6px; color: #e2e8f0; padding: 8px 10px; font-size: 0.82rem; font-family: monospace; resize: vertical; min-height: 70px; }
+    textarea:focus { outline: none; border-color: #4299e1; }
+    select { background: #0f1117; border: 1px solid #2d3748; border-radius: 6px; color: #e2e8f0; padding: 6px 10px; font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div style="width:28px;height:28px;background:#4299e1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px">📞</div>
+  <h1>Helen — Call Test</h1>
+  <span>Room: helen-room</span>
+  <div class="backend-url" id="backendLabel">backend: …</div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('caller')">📲 Caller</div>
+  <div class="tab" onclick="switchTab('receiver')">🎧 Receiver (Helen)</div>
+</div>
+
+<!-- ══ CALLER ══════════════════════════════════════════════════════════════ -->
+<div id="tab-caller" class="panel active">
+  <div class="card">
+    <h2>Call Helen</h2>
+    <div class="status-line">
+      <span class="status-dot" id="c-dot"></span>
+      <span id="c-status">Idle</span>
+    </div>
+
+    <div class="audio-viz" id="c-viz"></div>
+
+    <!-- Queue / wait banner -->
+    <div class="queue-banner waiting" id="c-queue-banner">
+      <span>⏳</span>
+      <span id="c-queue-msg">Connecting…</span>
+    </div>
+
+    <div class="info-box">
+      <label>Room</label><span class="val" id="c-room">helen-room</span><br/>
+      <label>Session</label><span class="val" id="c-session">—</span><br/>
+      <label>Participants in room</label><span class="val" id="c-parts">0</span>
+    </div>
+
+    <div class="part-list" id="c-part-list"></div>
+
+    <div class="btn-row">
+      <button class="btn-primary" id="c-call-btn" onclick="callerCall()">📞 Call Helen</button>
+      <button class="btn-danger"  id="c-hang-btn" onclick="callerHangup()" disabled>🔴 Hang up</button>
+      <button class="btn-primary" id="c-mute-btn" onclick="callerMute()" disabled style="background:#2d3748;color:#a0aec0">🎤 Mute</button>
+    </div>
+
+    <div class="log" id="c-log"></div>
+  </div>
+</div>
+
+<!-- ══ RECEIVER ════════════════════════════════════════════════════════════ -->
+<div id="tab-receiver" class="panel">
+  <div class="card">
+    <h2>Receiver — You are Helen</h2>
+    <div class="status-line">
+      <span class="status-dot" id="r-dot"></span>
+      <span id="r-status">Offline</span>
+    </div>
+
+    <!-- Incoming call banner -->
+    <div class="queue-banner ringing" id="r-ring-banner">
+      <span class="ring-icon">🔔</span>
+      <div>
+        <strong>Incoming caller!</strong><br/>
+        <span id="r-caller-name" style="font-size:0.75rem;color:#a0aec0">—</span>
+      </div>
+    </div>
+
+    <div class="audio-viz" id="r-viz"></div>
+
+    <div class="info-box">
+      <label>Room</label><span class="val">helen-room</span><br/>
+      <label>Participants</label><span class="val" id="r-parts">0</span>
+    </div>
+
+    <div class="part-list" id="r-part-list"></div>
+
+    <div class="btn-row">
+      <button class="btn-primary" id="r-join-btn" onclick="recvJoin()">🎧 Go Online</button>
+      <button class="btn-danger"  id="r-leave-btn" onclick="recvLeave()" disabled>🔴 Leave</button>
+      <button class="btn-primary" id="r-mute-btn"  onclick="recvMute()"  disabled style="background:#2d3748;color:#a0aec0">🎤 Mute</button>
+    </div>
+
+    <div class="tts-section">
+      <h3>🔊 Piper TTS — speak as Helen</h3>
+      <textarea id="tts-text" placeholder="Type what Helen should say…"></textarea>
+      <div class="btn-row" style="margin-top:8px">
+        <select id="tts-voice">
+          <option value="en_US-ryan-high">Ryan High (en_US)</option>
+          <option value="en_US-lessac-medium">Lessac (en_US)</option>
+          <option value="en_US-ryan-medium">Ryan Medium (en_US)</option>
+        </select>
+        <button class="btn-primary" id="tts-btn" onclick="ttsPiper()" disabled>🗣️ Speak (Piper)</button>
+        <button class="btn-success" onclick="ttsBrowser()">🔉 Browser TTS</button>
+      </div>
+    </div>
+
+    <div class="log" id="r-log"></div>
+  </div>
+</div>
+
+<audio id="c-audio" autoplay playsinline></audio>
+<audio id="r-audio" autoplay playsinline></audio>
+
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.5.7/dist/livekit-client.umd.min.js"></script>
+<script>
+// ── Catch any unhandled JS errors and show them on page ───────────────────────
+window.onerror = (msg, src, line) => {
+  const logEls = document.querySelectorAll('.log');
+  logEls.forEach(el => {
+    const d = document.createElement('div');
+    d.innerHTML = `<span style="color:#fc8181">[JS ERROR] ${msg} (${src}:${line})</span>`;
+    el.appendChild(d);
+  });
+};
+
+// ── Check LiveKit SDK loaded ──────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  if (typeof LivekitClient === 'undefined') {
+    document.querySelectorAll('.log').forEach(el => {
+      el.innerHTML = '<div style="color:#fc8181">❌ LiveKit SDK failed to load from CDN. Check internet connection.</div>';
+    });
+  } else {
+    console.log('LiveKit SDK loaded OK, version:', LivekitClient.version || 'unknown');
+  }
+});
+
+// ── Config ────────────────────────────────────────────────────────────────────
+const API = (() => {
+  if (window.location.protocol === 'file:')
+    return 'https://bairnly-unvamped-billye.ngrok-free.dev';
+  const h = window.location.hostname;
+  if (h === 'localhost' || h === '127.0.0.1')
+    return `http://${h}:8000`;
+  // On Vercel — use relative URLs, vercel.json proxies to ngrok backend
+  return '';
+})();
+document.getElementById('backendLabel').textContent = 'backend: ' + API;
+
+const LK_URL = 'wss://sch-natyyy4y.livekit.cloud';
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) =>
+    t.classList.toggle('active', (i===0&&name==='caller')||(i===1&&name==='receiver')));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+}
+
+// ── Log helpers ───────────────────────────────────────────────────────────────
+function log(id, msg, cls='ok') {
+  const el = document.getElementById(id);
+  const ts = new Date().toLocaleTimeString();
+  const d  = document.createElement('div');
+  d.innerHTML = `<span class="ts">[${ts}]</span> <span class="${cls}">${msg}</span>`;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Audio viz ─────────────────────────────────────────────────────────────────
+const _vizTimers = {};
+function startViz(id) {
+  const el = document.getElementById(id);
+  el.innerHTML = Array.from({length:14},()=>'<div class="bar"></div>').join('');
+  const bars = el.querySelectorAll('.bar');
+  _vizTimers[id] = setInterval(() => {
+    bars.forEach(b => b.style.height = (Math.random()*36+4)+'px');
+  }, 80);
+}
+function stopViz(id) {
+  clearInterval(_vizTimers[id]);
+  const el = document.getElementById(id);
+  el.querySelectorAll('.bar').forEach(b => b.style.height='4px');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CALLER
+// ══════════════════════════════════════════════════════════════════════════════
+let cRoom = null, cMuted = false, cSessionId = null;
+let _countdownInterval = null, _countdownSec = 0;
+
+function _startCountdown(waitSec) {
+  _countdownSec = waitSec;
+  const banner = document.getElementById('c-queue-banner');
+  banner.classList.add('show');
+  _countdownInterval = setInterval(() => {
+    _countdownSec -= 1;
+    if (_countdownSec <= 0) {
+      _stopCountdown();
+      document.getElementById('c-queue-msg').textContent = 'Connecting you now…';
+      return;
+    }
+    document.getElementById('c-queue-msg').textContent =
+      `Helen is busy. Your wait time is approximately ${_countdownSec} seconds.`;
+  }, 1000);
+}
+
+function _stopCountdown() {
+  if (_countdownInterval) { clearInterval(_countdownInterval); _countdownInterval = null; }
+}
+
+function cStatus(msg, color) {
+  document.getElementById('c-status').textContent = msg;
+  document.getElementById('c-dot').className = 'status-dot ' + (color||'');
+}
+
+async function callerCall() {
+  cStatus('Getting token…', 'yellow');
+  log('c-log', 'Requesting caller token…', 'inf');
+
+  let data;
+  try {
+    const res = await fetch(`${API}/livekit/caller-token`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    data = await res.json();
+  } catch(e) {
+    log('c-log', 'Token error: '+e.message, 'err');
+    cStatus('Error','red'); return;
+  }
+
+  cSessionId = data.session_id;
+  document.getElementById('c-session').textContent = data.session_id?.slice(0,12)+'…';
+
+  // Show queue message if waiting
+  if (data.wait_seconds > 0) {
+    document.getElementById('c-queue-msg').textContent = data.wait_message;
+    log('c-log', '⏳ ' + data.wait_message, 'wrn');
+    _startCountdown(data.wait_seconds);
+  } else {
+    document.getElementById('c-queue-banner').classList.remove('show');
+    log('c-log', 'Queue position: 1 — connecting now', 'inf');
+  }
+
+  await _connectCaller(data.token, data.url || LK_URL);
+}
+
+async function _connectCaller(token, url) {
+  if (cRoom) { await cRoom.disconnect(); cRoom = null; }
+
+  cStatus('Connecting…', 'yellow');
+  const { Room, RoomEvent, Track } = LivekitClient;
+  cRoom = new Room({ adaptiveStream: true, dynacast: true });
+
+  cRoom.on(RoomEvent.Connected, async () => {
+    log('c-log', '✓ Connected to helen-room', 'inf');
+    cStatus('In call', 'green');
+    document.getElementById('c-call-btn').disabled = true;
+    document.getElementById('c-hang-btn').disabled = false;
+    document.getElementById('c-mute-btn').disabled = false;
+    document.getElementById('c-queue-banner').classList.remove('show');
+    startViz('c-viz');
+    try {
+      await cRoom.localParticipant.setMicrophoneEnabled(true);
+      log('c-log','🎤 Mic enabled');
+    } catch(micErr) {
+      log('c-log','⚠️ Mic denied: '+micErr.message,'wrn');
+    }
+    _updateCParts();
+  });
+
+  cRoom.on(RoomEvent.Disconnected, () => {
+    cStatus('Disconnected','red');
+    document.getElementById('c-call-btn').disabled = false;
+    document.getElementById('c-hang-btn').disabled = true;
+    document.getElementById('c-mute-btn').disabled = true;
+    document.getElementById('c-queue-banner').classList.remove('show');
+    stopViz('c-viz');
+    _stopCountdown();
+    _updateCParts();
+    if (cSessionId) {
+      fetch(`${API}/livekit/caller-queue/${cSessionId}`, {method:'DELETE'}).catch(()=>{});
+      cSessionId = null;
+    }
+  });
+
+  cRoom.on(RoomEvent.ParticipantConnected, p => {
+    log('c-log', `👤 ${p.identity} joined`, 'inf');
+    _updateCParts();
+  });
+
+  cRoom.on(RoomEvent.ParticipantDisconnected, p => {
+    log('c-log', `👤 ${p.identity} left`, 'wrn');
+    _updateCParts();
+  });
+
+  cRoom.on(RoomEvent.TrackSubscribed, (track, pub, participant) => {
+    if (track.kind === LivekitClient.Track.Kind.Audio) {
+      track.attach(document.getElementById('c-audio'));
+      log('c-log', `🔊 Audio from ${participant.identity}`);
+    }
+  });
+
+  try {
+    await cRoom.connect(url, token);
+  } catch(e) {
+    log('c-log', 'Connect failed: '+e.message, 'err');
+    cStatus('Failed','red');
+  }
+}
+
+function _updateCParts() {
+  if (!cRoom) return;
+  const parts = [...cRoom.remoteParticipants.values()];
+  document.getElementById('c-parts').textContent = parts.length;
+  document.getElementById('c-part-list').innerHTML = parts.map(p => `
+    <div class="part-item">
+      <span class="status-dot green"></span>
+      <span class="pname">${p.identity}</span>
+      <span class="ptype">${p.identity.startsWith('helen') ? 'Helen (receiver)' : 'Participant'}</span>
+    </div>`).join('');
+}
+
+function callerMute() {
+  if (!cRoom) return;
+  cMuted = !cMuted;
+  cRoom.localParticipant.setMicrophoneEnabled(!cMuted);
+  const b = document.getElementById('c-mute-btn');
+  b.textContent = cMuted ? '🔇 Unmute' : '🎤 Mute';
+  b.style.background = cMuted ? '#744210' : '#2d3748';
+}
+
+async function callerHangup() {
+  _stopCountdown();
+  if (cSessionId) {
+    fetch(`${API}/livekit/caller-queue/${cSessionId}`, {method:'DELETE'}).catch(()=>{});
+    cSessionId = null;
+  }
+  if (cRoom) { await cRoom.disconnect(); cRoom = null; }
+  cStatus('Hung up','');
+  document.getElementById('c-call-btn').disabled = false;
+  document.getElementById('c-hang-btn').disabled = true;
+  document.getElementById('c-mute-btn').disabled = true;
+  document.getElementById('c-queue-banner').classList.remove('show');
+  log('c-log', '📴 Hung up','wrn');
+  stopViz('c-viz');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// RECEIVER (Helen)
+// ══════════════════════════════════════════════════════════════════════════════
+let rRoom = null, rMuted = false;
+
+function rStatus(msg, color) {
+  document.getElementById('r-status').textContent = msg;
+  document.getElementById('r-dot').className = 'status-dot ' + (color||'');
+}
+
+async function recvJoin() {
+  rStatus('Getting token…','yellow');
+  log('r-log','Requesting receiver token…','inf');
+
+  let data;
+  try {
+    const res = await fetch(`${API}/livekit/receiver-token?identity=helen-receiver&name=Helen`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+    data = await res.json();
+  } catch(e) {
+    log('r-log','Token error: '+e.message,'err');
+    rStatus('Error','red'); return;
+  }
+
+  log('r-log',`Token ok — joining helen-room`,'inf');
+  await _connectReceiver(data.token, data.url || LK_URL);
+}
+
+async function _connectReceiver(token, url) {
+  if (rRoom) { await rRoom.disconnect(); rRoom = null; }
+
+  const { Room, RoomEvent, Track } = LivekitClient;
+  rRoom = new Room({ adaptiveStream: true, dynacast: true });
+
+  rRoom.on(RoomEvent.Connected, async () => {
+    log('r-log','✓ Connected to helen-room','inf');
+    rStatus('Online — waiting for callers','green');
+    document.getElementById('r-join-btn').disabled  = true;
+    document.getElementById('r-leave-btn').disabled = false;
+    document.getElementById('r-mute-btn').disabled  = false;
+    document.getElementById('tts-btn').disabled     = false;
+    startViz('r-viz');
+    try {
+      await rRoom.localParticipant.setMicrophoneEnabled(true);
+      log('r-log','🎤 Mic enabled — speak to callers');
+    } catch(micErr) {
+      log('r-log','⚠️ Mic denied: '+micErr.message+' — you can still hear callers','wrn');
+    }
+    _updateRParts();
+  });
+
+  rRoom.on(RoomEvent.Disconnected, () => {
+    rStatus('Offline','');
+    document.getElementById('r-join-btn').disabled  = false;
+    document.getElementById('r-leave-btn').disabled = true;
+    document.getElementById('r-mute-btn').disabled  = true;
+    document.getElementById('tts-btn').disabled     = true;
+    stopViz('r-viz');
+    document.getElementById('r-ring-banner').classList.remove('show');
+    _updateRParts();
+  });
+
+  rRoom.on(RoomEvent.ParticipantConnected, p => {
+    log('r-log',`📲 Caller joined: ${p.identity}`,'inf');
+    document.getElementById('r-ring-banner').classList.add('show');
+    document.getElementById('r-caller-name').textContent = p.identity;
+    rStatus('In call — caller connected','green');
+    _updateRParts();
+    p.trackPublications.forEach(pub => {
+      if (pub.track && pub.track.kind === Track.Kind.Audio)
+        pub.track.attach(document.getElementById('r-audio'));
+    });
+  });
+
+  rRoom.on(RoomEvent.ParticipantDisconnected, p => {
+    log('r-log',`📴 ${p.identity} left`,'wrn');
+    document.getElementById('r-ring-banner').classList.remove('show');
+    rStatus('Online — waiting','green');
+    _updateRParts();
+  });
+
+  rRoom.on(RoomEvent.TrackSubscribed, (track, pub, participant) => {
+    if (track.kind === LivekitClient.Track.Kind.Audio) {
+      track.attach(document.getElementById('r-audio'));
+      log('r-log',`🔊 Audio from ${participant.identity}`);
+    }
+  });
+
+  try {
+    await rRoom.connect(url, token);
+  } catch(e) {
+    log('r-log','Connect failed: '+e.message,'err');
+    rStatus('Failed','red');
+  }
+}
+
+function _updateRParts() {
+  if (!rRoom) return;
+  const parts = [...rRoom.remoteParticipants.values()];
+  document.getElementById('r-parts').textContent = parts.length;
+  document.getElementById('r-part-list').innerHTML = parts.map(p => `
+    <div class="part-item">
+      <span class="status-dot green"></span>
+      <span class="pname">${p.identity}</span>
+      <span class="ptype">Caller</span>
+    </div>`).join('');
+}
+
+function recvMute() {
+  if (!rRoom) return;
+  rMuted = !rMuted;
+  rRoom.localParticipant.setMicrophoneEnabled(!rMuted);
+  const b = document.getElementById('r-mute-btn');
+  b.textContent = rMuted ? '🔇 Unmute' : '🎤 Mute';
+  b.style.background = rMuted ? '#744210' : '#2d3748';
+}
+
+async function recvLeave() {
+  if (rRoom) { await rRoom.disconnect(); rRoom = null; }
+  rStatus('Offline','');
+  document.getElementById('r-join-btn').disabled  = false;
+  document.getElementById('r-leave-btn').disabled = true;
+  document.getElementById('tts-btn').disabled     = true;
+  stopViz('r-viz');
+  log('r-log','Left room','wrn');
+}
+
+// ── TTS ───────────────────────────────────────────────────────────────────────
+async function ttsPiper() {
+  const text  = document.getElementById('tts-text').value.trim();
+  const voice = document.getElementById('tts-voice').value;
+  if (!text) { log('r-log','Enter text first','wrn'); return; }
+
+  log('r-log',`TTS → "${text.slice(0,40)}"  voice=${voice}`,'inf');
+  try {
+    const res = await fetch(`${API}/tts/speak`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({text, voice}),
+    });
+    if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+    // Play WAV in browser so Helen can hear it too
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = new Audio(url);
+    a.play();
+    log('r-log','✓ Piper TTS playing','ok');
+  } catch(e) {
+    log('r-log','Piper failed: '+e.message+' — falling back to browser TTS','wrn');
+    ttsBrowser();
+  }
+}
+
+function ttsBrowser() {
+  const text = document.getElementById('tts-text').value.trim() || 'Hello, this is Helen.';
+  const utt  = new SpeechSynthesisUtterance(text);
+  utt.rate = 0.95; utt.pitch = 1.0;
+  window.speechSynthesis.speak(utt);
+  log('r-log','🔉 Browser TTS: '+text.slice(0,50));
+}
+</script>
+</body>
+</html>
