@@ -198,10 +198,11 @@
     <div class="part-list" id="r-part-list"></div>
 
     <div class="btn-row">
-      <button class="btn-primary" id="r-join-btn"  onclick="recvJoin()">🎧 Go Online</button>
-      <button class="btn-danger"  id="r-leave-btn" onclick="recvLeave()" disabled>🔴 Leave</button>
-      <button class="btn-primary" id="r-mute-btn"  onclick="recvMute()"  disabled style="background:#2d3748;color:#a0aec0">🎤 Mute</button>
-      <button class="btn-warn"    id="r-conf-btn"  onclick="recvConference()" disabled style="display:none">👥 Conference</button>
+      <button class="btn-primary" id="r-join-btn"   onclick="recvJoin()">🎧 Go Online</button>
+      <button class="btn-danger"  id="r-leave-btn"  onclick="recvLeave()" disabled>🔴 Go Offline</button>
+      <button class="btn-primary" id="r-mute-btn"   onclick="recvMute()"  disabled style="background:#2d3748;color:#a0aec0">🎤 Mute</button>
+      <button class="btn-warn"    id="r-conf-btn"   onclick="recvConference()" disabled style="display:none">👥 Conference</button>
+      <button class="btn-danger"  id="r-hangup-btn" onclick="recvHangupActive()" disabled style="display:none">📴 End Call</button>
     </div>
 
     <!-- Waiting callers list (shown when in active call and others are queued) -->
@@ -588,6 +589,8 @@ function modalPickUp(){
   document.getElementById('r-active-caller').textContent = identity;
   document.getElementById('r-conf-btn').style.display='inline-block';
   document.getElementById('r-conf-btn').disabled=false;
+  document.getElementById('r-hangup-btn').style.display='inline-block';
+  document.getElementById('r-hangup-btn').disabled=false;
   _updateRParts();
   _updateWaitingList();
 }
@@ -692,11 +695,14 @@ function _setWaitDur(identity, sec, el){
   el.classList.add('selected');
 }
 
-function _sendWaitTts(identity){
+async function _sendWaitTts(identity){
   const sec = _waitingDuration.get(identity) || 120;
   const min = Math.round(sec/60);
   const msg = `Please hold. Helen will be with you in approximately ${min} minute${min!==1?'s':''}.`;
-  _sendDataToRoom({type:'wait_update', seconds: sec, for_identity: identity});
+  // Send as a visible message banner on caller's screen
+  _sendDataToRoom({type:'message', text: msg, from:'Helen', ts: Date.now()});
+  // Speak it via Piper/TTS so the waiting caller actually hears it
+  await _speakText(msg);
   log('r-log',`🔊 Told ${identity}: ~${min} min wait`,'inf');
 }
 
@@ -719,6 +725,8 @@ function recvHangupActive(){
   _inConference = false;
   document.getElementById('r-active-banner').style.display='none';
   document.getElementById('r-conf-btn').style.display='none';
+  document.getElementById('r-hangup-btn').style.display='none';
+  document.getElementById('r-hangup-btn').disabled=true;
   rStatus('Online — waiting','green');
   log('r-log','📴 Ended current call','wrn');
   _updateWaitingList();
@@ -821,6 +829,8 @@ async function _connectReceiver(token){
     document.getElementById('tts-btn').disabled=true;
     document.getElementById('r-active-banner').style.display='none';
     document.getElementById('r-conf-btn').style.display='none';
+    document.getElementById('r-hangup-btn').style.display='none';
+    document.getElementById('r-hangup-btn').disabled=true;
     stopViz('r-viz'); clearInterval(_queuePollInterval); _updateRParts();
     clearInterval(_callTimerInterval);
     _waitingCallers.clear(); _updateWaitingList();
