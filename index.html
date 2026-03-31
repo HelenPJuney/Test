@@ -204,6 +204,12 @@
       <button class="btn-warn"    id="r-conf-btn"  onclick="recvConference()" disabled style="display:none">👥 Conference</button>
     </div>
 
+    <!-- Waiting callers list (shown when in active call and others are queued) -->
+    <div id="r-waiting-list" style="display:none;margin-top:12px;border-top:1px solid #2d3748;padding-top:10px">
+      <div style="font-size:0.78rem;color:#718096;margin-bottom:6px">⏳ Waiting callers</div>
+      <div id="r-waiting-items"></div>
+    </div>
+
     <!-- Message to caller -->
     <div class="msg-section">
       <h3>💬 Send message to caller (shows on their screen)</h3>
@@ -317,7 +323,7 @@ function cStatus(msg,color) {
   document.getElementById('c-dot').className='status-dot '+(color||'');
 }
 
-// Queue countdown
+// Visual countdown in the queue banner
 function _startCountdown(sec) {
   _cSec = sec;
   document.getElementById('c-queue-banner').classList.add('show');
@@ -327,15 +333,20 @@ function _startCountdown(sec) {
     document.getElementById('c-queue-msg').textContent=`Helen is busy. Wait time: ${_cSec}s`;
   },1000);
 }
+
+// Stop ALL caller-side timers and TTS loop
 function _stopCountdown(){
   clearInterval(_cdi); _cdi=null;
   clearInterval(_cai); _cai=null;
 }
 
+// Play TTS announcements every 10s on caller's browser while waiting
 async function _playWaitAnnouncement(msg, totalWait) {
   await _speakText(msg);
   let rem = totalWait;
   _cai = setInterval(async()=>{
+    // If we've been connected (no longer waiting), stop
+    if(!_cai) return;
     rem -= 10;
     if (rem<=0){ clearInterval(_cai); _cai=null; await _speakText('You are next. Connecting you to Helen now.'); return; }
     await _speakText(`Please hold. Your wait time is approximately ${rem} seconds.`);
@@ -359,6 +370,7 @@ async function callerCall() {
     document.getElementById('c-queue-msg').textContent = data.wait_message;
     log('c-log','⏳ '+data.wait_message,'wrn');
     _startCountdown(data.wait_seconds);
+    // Only start TTS loop BEFORE connecting — will be stopped on RoomEvent.Connected
     _playWaitAnnouncement(data.wait_message, data.wait_seconds);
   } else {
     document.getElementById('c-queue-banner').classList.remove('show');
@@ -379,6 +391,7 @@ async function _connectCaller(token) {
     document.getElementById('c-hang-btn').disabled=false;
     document.getElementById('c-mute-btn').disabled=false;
     document.getElementById('c-queue-banner').classList.remove('show');
+    // ★ STOP all wait TTS/countdown as soon as we are in the room
     _stopCountdown();
     startViz('c-viz');
     try { await cRoom.localParticipant.setMicrophoneEnabled(true); log('c-log','🎤 Mic on'); }
@@ -405,15 +418,26 @@ async function _connectCaller(token) {
   });
 
   // Listen for data messages from receiver (Helen)
-  cRoom.on(RoomEvent.DataReceived,(data,participant)=>{
+  cRoom.on(RoomEvent.DataReceived,(payload,participant)=>{
     try {
-      const msg = JSON.parse(new TextDecoder().decode(data));
+      const msg = JSON.parse(new TextDecoder().decode(payload));
       if (msg.type==='message') {
         const banner = document.getElementById('c-msg-banner');
         banner.textContent = '💬 Helen: ' + msg.text;
         banner.style.display='block';
         setTimeout(()=>banner.style.display='none', 6000);
         log('c-log','💬 Helen says: '+msg.text,'inf');
+      } else if (msg.type==='stop_tts') {
+        // Helen picked up this caller — stop any remaining TTS loop
+        _stopCountdown();
+        document.getElementById('c-queue-banner').classList.remove('show');
+      } else if (msg.type==='wait_update') {
+        // Helen is still busy, update countdown with new time
+        if (_cai || _cdi) {
+          _cSec = msg.seconds;
+          document.getElementById('c-queue-msg').textContent=`Helen is busy. Wait time: ${msg.seconds}s`;
+          _speakText(`Updated wait time: approximately ${msg.seconds} seconds.`);
+        }
       }
     } catch(e){}
   });
@@ -459,13 +483,14 @@ async function callerHangup(){
 // ══════════════════════════════════════════════════════════════════════════
 let rRoom=null, rMuted=false;
 let _activeCallerIdentity=null;
-let _callDurationSec=120;       // selected or default
 let _callTimerInterval=null;
 let _callTimerRemaining=0;
 let _pendingIncomingIdentity=null;
 let _selectedDuration=120;
 let _queuePollInterval=null;
 let _inConference=false;
+// Track callers waiting in room but not yet picked up
+const _waitingCallers = new Map(); // identity → session_id (unknown, just track identity)
 
 function rStatus(msg,color){
   document.getElementById('r-status').textContent=msg;
@@ -483,43 +508,66 @@ function selectDuration(el, sec){
 function _showIncomingModal(callerIdentity){
   _pendingIncomingIdentity = callerIdentity;
   document.getElementById('modal-caller-id').textContent = callerIdentity;
-  // Reset duration selection to default
   document.querySelectorAll('.dur-btn').forEach(b=>b.classList.remove('selected'));
   document.querySelector('.dur-btn[data-sec="120"]').classList.add('selected');
   _selectedDuration = 120;
   document.getElementById('incoming-modal').classList.add('show');
-  // Play ring sound via TTS
-  _speakText('Incoming call from ' + callerIdentity.replace(/caller-/g,'').slice(0,8));
+  _speakText('Incoming call from ' + callerIdentity.replace(/caller-/g,'').replace(/-\w+$/,'').slice(0,10));
 }
 
 function modalPickUp(){
   document.getElementById('incoming-modal').classList.remove('show');
-  _startCallTimer(_selectedDuration);
-  _activeCallerIdentity = _pendingIncomingIdentity;
+  const identity = _pendingIncomingIdentity;
   _pendingIncomingIdentity = null;
-  // Tell waiting callers the updated wait time
-  _broadcastWaitUpdate(_selectedDuration);
-  log('r-log',`✅ Picked up — ${_selectedDuration}s call duration`,'ok');
+
+  // If already in a call, end it first (switch call)
+  if (_activeCallerIdentity && _activeCallerIdentity !== identity) {
+    clearInterval(_callTimerInterval);
+    _waitingCallers.delete(_activeCallerIdentity);
+  }
+
+  _activeCallerIdentity = identity;
+  _waitingCallers.delete(identity);
+  _startCallTimer(_selectedDuration);
+
+  // ★ Tell this caller to stop their TTS wait loop
+  _sendDataToRoom({type:'stop_tts', identity});
+
+  // ★ Tell remaining waiters their updated wait time
+  _notifyWaiters(_selectedDuration);
+
+  // Remove from backend queue (they are now active, not queued)
+  fetch(`${API}/livekit/queue-info`,{headers:HEADERS})
+    .then(r=>r.json())
+    .then(d=>{
+      // We don't know their session_id from here, but we can refresh queue count
+      document.getElementById('r-queue-count').textContent = Math.max(0,(d.queue_depth||1)-1);
+    }).catch(()=>{});
+
+  log('r-log',`✅ Picked up ${identity} — ${_selectedDuration}s`,'ok');
   rStatus('In call','green');
   document.getElementById('r-active-banner').style.display='flex';
-  document.getElementById('r-active-caller').textContent = _activeCallerIdentity;
+  document.getElementById('r-active-caller').textContent = identity;
   document.getElementById('r-conf-btn').style.display='inline-block';
   document.getElementById('r-conf-btn').disabled=false;
+  _updateRParts();
+  _updateWaitingList();
 }
 
 function modalHold(){
   document.getElementById('incoming-modal').classList.remove('show');
-  // Tell caller they're on hold
-  const waitMsg = `Please hold. Helen will be with you shortly.`;
-  _speakText(waitMsg);
+  if(_pendingIncomingIdentity) _waitingCallers.set(_pendingIncomingIdentity, true);
+  _pendingIncomingIdentity = null;
+  _speakText('Please hold. Helen will be with you shortly.');
   log('r-log','⏸ Caller placed on hold','wrn');
+  _updateWaitingList();
 }
 
 function modalDecline(){
   document.getElementById('incoming-modal').classList.remove('show');
   _pendingIncomingIdentity = null;
+  _sendDataToRoom({type:'message', text:'Helen is unavailable right now. Please try again later.', from:'Helen', ts:Date.now()});
   log('r-log','❌ Call declined','wrn');
-  _speakText('Helen is unavailable right now. Please try again later.');
 }
 
 // ── Call timer ─────────────────────────────────────────────────────────────
@@ -533,7 +581,7 @@ function _startCallTimer(sec){
     if (_callTimerRemaining<=0){
       clearInterval(_callTimerInterval);
       log('r-log','⏰ Call time limit reached','wrn');
-      _speakText('Your call time is up. Thank you for calling.');
+      _sendDataToRoom({type:'message', text:'Your call time is up. Thank you for calling.', from:'Helen', ts:Date.now()});
     }
   },1000);
 }
@@ -544,16 +592,55 @@ function _updateTimerDisplay(){
   document.getElementById('r-timer').textContent = `${m}:${s.toString().padStart(2,'0')}`;
 }
 
-function _broadcastWaitUpdate(mySec){
-  // Tell backend the updated wait time for queued callers
-  fetch(`${API}/livekit/queue-info`,{headers:HEADERS})
-    .then(r=>r.json())
-    .then(d=>{
-      if(d.queue_depth>0){
-        const waitMsg = `Helen will be with you in approximately ${mySec} seconds.`;
-        _speakText(waitMsg);
-      }
-    }).catch(()=>{});
+// ★ Send a LiveKit data message to all room participants
+function _sendDataToRoom(obj){
+  if(!rRoom) return;
+  try{
+    rRoom.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(obj)),{reliable:true});
+  }catch(e){}
+}
+
+// ★ Tell all waiting callers their updated estimated wait time
+function _notifyWaiters(activeSec){
+  if(!rRoom) return;
+  let pos = 1;
+  _waitingCallers.forEach((v,identity)=>{
+    const waitSec = pos * activeSec;
+    _sendDataToRoom({type:'wait_update', seconds: waitSec, for_identity: identity});
+    pos++;
+  });
+}
+
+// ── Waiting callers list ───────────────────────────────────────────────────
+function _updateWaitingList(){
+  const container = document.getElementById('r-waiting-list');
+  const items = document.getElementById('r-waiting-items');
+  if(_waitingCallers.size===0 && !_activeCallerIdentity){
+    container.style.display='none'; return;
+  }
+  // Show waiting list if there are waiting callers
+  if(_waitingCallers.size>0){
+    container.style.display='block';
+    items.innerHTML=[..._waitingCallers.keys()].map((id,i)=>`
+      <div class="part-item" style="margin-bottom:6px">
+        <span class="status-dot yellow"></span>
+        <span class="pname" style="flex:1">${id}</span>
+        <button class="btn-success" style="padding:4px 10px;font-size:0.75rem" onclick="_pickWaiting('${id}')">Pick Up</button>
+        <button class="btn-danger"  style="padding:4px 10px;font-size:0.75rem;margin-left:4px" onclick="_dismissWaiting('${id}')">✗</button>
+      </div>`).join('');
+  } else {
+    container.style.display='none';
+  }
+}
+
+function _pickWaiting(identity){
+  _showIncomingModal(identity);
+}
+
+function _dismissWaiting(identity){
+  _waitingCallers.delete(identity);
+  _updateWaitingList();
+  _sendDataToRoom({type:'message', text:'Helen is currently busy. Please try again later.', from:'Helen', ts:Date.now()});
 }
 
 // ── Active call end ────────────────────────────────────────────────────────
@@ -565,18 +652,36 @@ function recvHangupActive(){
   document.getElementById('r-conf-btn').style.display='none';
   rStatus('Online — waiting','green');
   log('r-log','📴 Ended current call','wrn');
-  // Check if next caller waiting → show popup
-  _checkNextCaller();
+  _updateWaitingList();
+  // If there are waiting callers in room, show popup/modal for next one
+  if(_waitingCallers.size>0){
+    const next = [..._waitingCallers.keys()][0];
+    _showIncomingModal(next);
+  } else {
+    _checkNextCaller();
+  }
 }
 
 function _checkNextCaller(){
+  // Check room participants who aren't Helen and aren't active
+  if(rRoom){
+    const waiters=[...rRoom.remoteParticipants.values()]
+      .filter(p=>!p.identity.startsWith('helen') && p.identity!==_activeCallerIdentity);
+    if(waiters.length>0){
+      const popup = document.getElementById('next-caller-popup');
+      document.getElementById('next-caller-info').textContent=`${waiters.length} caller(s) waiting. Pick up next?`;
+      popup.classList.add('show');
+      _speakText(`You have ${waiters.length} caller waiting. Pick up?`);
+      return;
+    }
+  }
+  // Fallback: check backend queue
   fetch(`${API}/livekit/queue-info`,{headers:HEADERS})
     .then(r=>r.json())
     .then(d=>{
       if(d.queue_depth>0){
         const popup = document.getElementById('next-caller-popup');
-        document.getElementById('next-caller-info').textContent =
-          `${d.queue_depth} caller(s) waiting. Pick up next?`;
+        document.getElementById('next-caller-info').textContent=`${d.queue_depth} caller(s) waiting. Pick up next?`;
         popup.classList.add('show');
         _speakText(`You have ${d.queue_depth} caller waiting. Pick up?`);
       }
@@ -585,13 +690,10 @@ function _checkNextCaller(){
 
 function pickNextCaller(){
   document.getElementById('next-caller-popup').classList.remove('show');
-  // The next caller is already in the room — show incoming modal
-  if (rRoom){
-    const parts = [...rRoom.remoteParticipants.values()]
-      .filter(p=>!p.identity.startsWith('helen') && p.identity !== _activeCallerIdentity);
-    if(parts.length>0){
-      _showIncomingModal(parts[0].identity);
-    }
+  if(rRoom){
+    const parts=[...rRoom.remoteParticipants.values()]
+      .filter(p=>!p.identity.startsWith('helen') && p.identity!==_activeCallerIdentity);
+    if(parts.length>0) _showIncomingModal(parts[0].identity);
   }
 }
 
@@ -605,9 +707,7 @@ function recvConference(){
   const btn = document.getElementById('r-conf-btn');
   btn.textContent = _inConference ? '🔀 Exit Conference' : '👥 Conference';
   btn.style.background = _inConference ? '#744210' : '';
-  log('r-log', _inConference ? '👥 Conference mode ON — all in same room' : '👥 Conference OFF','inf');
-  // In LiveKit all participants in the same room already hear each other
-  // Conference just means we allow multiple active callers
+  log('r-log', _inConference ? '👥 Conference mode ON' : '👥 Conference OFF','inf');
 }
 
 // ── Join ───────────────────────────────────────────────────────────────────
@@ -641,7 +741,6 @@ async function _connectReceiver(token){
     try{ await rRoom.localParticipant.setMicrophoneEnabled(true); log('r-log','🎤 Mic on'); }
     catch(e){ log('r-log','Mic denied: '+e.message,'wrn'); }
     _updateRParts();
-    // Poll queue depth every 5s
     _queuePollInterval = setInterval(_pollQueue,5000);
   });
 
@@ -655,31 +754,48 @@ async function _connectReceiver(token){
     document.getElementById('r-conf-btn').style.display='none';
     stopViz('r-viz'); clearInterval(_queuePollInterval); _updateRParts();
     clearInterval(_callTimerInterval);
+    _waitingCallers.clear(); _updateWaitingList();
   });
 
   rRoom.on(RoomEvent.ParticipantConnected, p=>{
-    if(p.identity.startsWith('helen')) return; // ignore other receivers
+    if(p.identity.startsWith('helen')||p.identity.startsWith('piper')) return;
     log('r-log',`📲 Caller joined: ${p.identity}`,'inf');
     _updateRParts();
-    // Show incoming modal only if not already in a call, or in conference mode
+
     if(!_activeCallerIdentity || _inConference){
+      // No active call (or conference mode) — show incoming modal immediately
       _showIncomingModal(p.identity);
     } else {
-      // Already in call — show a notification that another caller is waiting
-      log('r-log',`⏳ ${p.identity} waiting in queue`,'wrn');
+      // Already on a call — add to waiting list and notify caller to hold
+      _waitingCallers.set(p.identity, true);
+      _updateWaitingList();
+      // Tell this new caller they are waiting
+      const waitSec = _callTimerRemaining > 0 ? _callTimerRemaining : _selectedDuration;
+      _sendDataToRoom({type:'wait_update', seconds: waitSec, for_identity: p.identity});
+      log('r-log',`⏳ ${p.identity} added to waiting list`,'wrn');
+      _speakText('New caller waiting.');
     }
   });
 
   rRoom.on(RoomEvent.ParticipantDisconnected,p=>{
     log('r-log',`📴 ${p.identity} left`,'wrn');
+    _waitingCallers.delete(p.identity);
     if(p.identity === _activeCallerIdentity){
       clearInterval(_callTimerInterval);
       _activeCallerIdentity=null;
       document.getElementById('r-active-banner').style.display='none';
       document.getElementById('r-conf-btn').style.display='none';
       rStatus('Online — waiting','green');
-      log('r-log','Call ended — checking queue…','inf');
-      setTimeout(_checkNextCaller,1000);
+      log('r-log','Active caller left — checking queue…','inf');
+      _updateWaitingList();
+      setTimeout(()=>{
+        if(_waitingCallers.size>0){
+          const next=[..._waitingCallers.keys()][0];
+          _showIncomingModal(next);
+        } else {
+          _checkNextCaller();
+        }
+      },800);
     }
     _updateRParts();
   });
@@ -695,11 +811,12 @@ async function _connectReceiver(token){
 
 function _updateRParts(){
   if(!rRoom)return;
-  const parts=[...rRoom.remoteParticipants.values()].filter(p=>!p.identity.startsWith('helen'));
+  const parts=[...rRoom.remoteParticipants.values()]
+    .filter(p=>!p.identity.startsWith('helen')&&!p.identity.startsWith('piper'));
   document.getElementById('r-parts').textContent=parts.length;
   document.getElementById('r-part-list').innerHTML=parts.map(p=>`
     <div class="part-item">
-      <span class="status-dot green"></span>
+      <span class="status-dot ${p.identity===_activeCallerIdentity?'green':'yellow'}"></span>
       <span class="pname">${p.identity}</span>
       <span class="ptype">${p.identity===_activeCallerIdentity?'Active call':'Waiting'}</span>
     </div>`).join('');
@@ -709,7 +826,10 @@ async function _pollQueue(){
   try{
     const res = await fetch(`${API}/livekit/queue-info`,{headers:HEADERS});
     const d = await res.json();
-    document.getElementById('r-queue-count').textContent = d.queue_depth||0;
+    // Show actual waiting count from room (more accurate than backend queue)
+    const roomWaiters = rRoom ? [...rRoom.remoteParticipants.values()]
+      .filter(p=>!p.identity.startsWith('helen')&&!p.identity.startsWith('piper')&&p.identity!==_activeCallerIdentity).length : 0;
+    document.getElementById('r-queue-count').textContent = roomWaiters;
   }catch(e){}
 }
 
@@ -725,21 +845,21 @@ async function recvLeave(){
   clearInterval(_queuePollInterval); clearInterval(_callTimerInterval);
   if(rRoom){await rRoom.disconnect(); rRoom=null;}
   rStatus('Offline',''); _activeCallerIdentity=null;
+  _waitingCallers.clear();
   document.getElementById('r-join-btn').disabled=false;
   document.getElementById('r-leave-btn').disabled=true;
   document.getElementById('tts-btn').disabled=true;
   document.getElementById('r-active-banner').style.display='none';
   stopViz('r-viz'); log('r-log','Left room','wrn');
+  _updateWaitingList();
 }
 
 // ── Send message to caller ────────────────────────────────────────────────
 async function recvSendMsg(){
   const text = document.getElementById('r-msg-input').value.trim();
   if(!text||!rRoom) return;
-  const payload = JSON.stringify({type:'message', text, from:'Helen', ts: Date.now()});
-  await rRoom.localParticipant.publishData(new TextEncoder().encode(payload), {reliable:true});
+  _sendDataToRoom({type:'message', text, from:'Helen', ts: Date.now()});
   document.getElementById('r-msg-input').value='';
-  // Show in feed
   const feed = document.getElementById('r-msg-feed');
   const d = document.createElement('div');
   d.className='msg-item';
