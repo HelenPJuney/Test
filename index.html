@@ -273,7 +273,7 @@ async function callerCall() {
 
   let data;
   try {
-    const res = await fetch(`${API}/livekit/caller-token`);
+    const res = await fetch(`${API}/livekit/caller-token`, { headers: { 'ngrok-skip-browser-warning': '1' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
     data = await res.json();
   } catch(e) {
@@ -414,7 +414,7 @@ async function recvJoin() {
 
   let data;
   try {
-    const res = await fetch(`${API}/livekit/receiver-token?identity=helen-receiver&name=Helen`);
+    const res = await fetch(`${API}/livekit/receiver-token?identity=helen-receiver&name=Helen`, { headers: { 'ngrok-skip-browser-warning': '1' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
     data = await res.json();
   } catch(e) {
@@ -535,7 +535,7 @@ async function ttsPiper() {
   try {
     const res = await fetch(`${API}/tts/speak`, {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      headers: {'Content-Type':'application/json', 'ngrok-skip-browser-warning': '1'},
       body: JSON.stringify({text, voice}),
     });
     if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
