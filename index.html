@@ -294,7 +294,7 @@ async function callerCall() {
     log('c-log', 'Queue position: 1 — connecting now', 'inf');
   }
 
-  await _connectCaller(data.token, data.url || LK_URL);
+  await _connectCaller(data.token, LK_URL);
 }
 
 async function _connectCaller(token, url) {
@@ -423,7 +423,7 @@ async function recvJoin() {
   }
 
   log('r-log',`Token ok — joining helen-room`,'inf');
-  await _connectReceiver(data.token, data.url || LK_URL);
+  await _connectReceiver(data.token, LK_URL);
 }
 
 async function _connectReceiver(token, url) {
