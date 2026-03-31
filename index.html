@@ -192,13 +192,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const API = (() => {
-  if (window.location.protocol === 'file:')
-    return 'https://bairnly-unvamped-billye.ngrok-free.dev';
   const h = window.location.hostname;
   if (h === 'localhost' || h === '127.0.0.1')
     return `http://${h}:8000`;
-  // On Vercel — use relative URLs, vercel.json proxies to ngrok backend
-  return '';
+  // On Vercel or any other host — call ngrok backend directly
+  return 'https://bairnly-unvamped-billye.ngrok-free.dev';
 })();
 document.getElementById('backendLabel').textContent = 'backend: ' + API;
 
