@@ -260,6 +260,49 @@ function _startCountdown(waitSec) {
 
 function _stopCountdown() {
   if (_countdownInterval) { clearInterval(_countdownInterval); _countdownInterval = null; }
+  if (_announceInterval) { clearInterval(_announceInterval); _announceInterval = null; }
+}
+
+let _announceInterval = null;
+
+async function _playWaitAnnouncement(firstMsg, totalWait) {
+  // Play first announcement now
+  await _speakText(firstMsg);
+
+  let remaining = totalWait;
+  // Every 10 seconds speak an update
+  _announceInterval = setInterval(async () => {
+    remaining -= 10;
+    if (remaining <= 0) {
+      clearInterval(_announceInterval);
+      _announceInterval = null;
+      await _speakText('You are next. Connecting you to Helen now.');
+      return;
+    }
+    await _speakText(`Please hold. Your wait time is approximately ${remaining} seconds.`);
+  }, 10000);
+}
+
+async function _speakText(text) {
+  // Try Piper via backend first, fallback to browser TTS
+  try {
+    const res = await fetch(`${API}/tts/speak`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
+      body: JSON.stringify({ text, voice: 'en_US-ryan-high' }),
+    });
+    if (!res.ok) throw new Error('piper failed');
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    await audio.play();
+    return;
+  } catch(e) {
+    // fallback to browser TTS
+  }
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.rate = 0.92;
+  window.speechSynthesis.speak(utt);
 }
 
 function cStatus(msg, color) {
@@ -289,6 +332,8 @@ async function callerCall() {
     document.getElementById('c-queue-msg').textContent = data.wait_message;
     log('c-log', '⏳ ' + data.wait_message, 'wrn');
     _startCountdown(data.wait_seconds);
+    // Play TTS announcement immediately in browser
+    _playWaitAnnouncement(data.wait_message, data.wait_seconds);
   } else {
     document.getElementById('c-queue-banner').classList.remove('show');
     log('c-log', 'Queue position: 1 — connecting now', 'inf');
