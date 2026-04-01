@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { 
   LiveKitRoom, 
   RoomAudioRenderer, 
-  AudioVisualizer, 
   DisconnectButton,
   useRoomContext
 } from '@livekit/components-react';
@@ -34,10 +33,9 @@ function ActiveRoomLayout({ status, onHardTeardown }) {
       ) : (
         <div className="status-connected">
           <h2 style={{ color: '#56d364' }}>🟢 Connected to Agent</h2>
-          <div style={{ margin: '2rem 0', height: '100px' }}>
-             {/* Using standard LiveKit Visualizer for audio bar rendering */}
-            <AudioVisualizer />
-          </div>
+          <div style={{ margin: '2rem 0', height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+         <p style={{color: '#a0aec0'}}>Audio Active</p>
+      </div>
         </div>
       )}
       

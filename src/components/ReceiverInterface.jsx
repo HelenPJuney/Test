@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   LiveKitRoom, 
   RoomAudioRenderer, 
-  AudioVisualizer, 
   DisconnectButton,
   useRoomContext
 } from '@livekit/components-react';
@@ -54,8 +53,8 @@ function ActiveReceiverLayout({ onHardTeardown }) {
          ))}
       </div>
 
-      <div style={{ margin: '2rem 0', height: '100px' }}>
-         <AudioVisualizer />
+      <div style={{ margin: '2rem 0', height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+         <p style={{color: '#a0aec0'}}>Audio Active</p>
       </div>
 
       <div style={{ marginTop: '2rem' }}>
