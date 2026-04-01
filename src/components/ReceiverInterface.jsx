@@ -162,6 +162,30 @@ export function ReceiverInterface() {
     }
   };
 
+  const queueDashboard = (
+    <div style={{ background: '#0f1117', padding: '1rem', borderRadius: '8px', margin: '1rem 0' }}>
+       <h3 style={{ margin: '0 0 1rem 0', color: '#e2e8f0' }}>Queue Dashboard</h3>
+       <p style={{ marginBottom: '1rem', color: '#a0aec0' }}>Callers waiting: {queue.length}</p>
+       {queue.length === 0 && <p style={{ color: '#718096' }}>No active callers.</p>}
+       
+       <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+         {queue.map(q => (
+           <div key={q.session_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1a202c', padding: '0.8rem', borderRadius: '4px', marginBottom: '0.5rem' }}>
+             <div>
+               <p style={{ color: '#90cdf4', margin: 0 }}>📞 Caller ID: {q.caller_id}</p>
+               <p style={{ color: '#a0aec0', fontSize: '0.8em', margin: 0 }}>Wait time: {q.wait_sec}s | Pos: {q.position}</p>
+             </div>
+             {status === 'online' && (
+               <button onClick={() => acceptCall(q)} style={{ background: '#3182ce', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' }}>
+                 Accept
+               </button>
+             )}
+           </div>
+         ))}
+       </div>
+    </div>
+  );
+
   if (status === 'offline') {
     return (
       <div className="card" style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
@@ -181,7 +205,6 @@ export function ReceiverInterface() {
         </div>
         <p style={{ margin: '0.5rem 0', color: '#a0aec0' }}>Monitoring isolated caller queue...</p>
         
-        {/* Incoming Call Popup */}
         {ringing.length > 0 && (
           <div style={{ 
             background: '#2b6cb0', 
@@ -209,27 +232,7 @@ export function ReceiverInterface() {
           </div>
         )}
 
-        {/* Queue Dashboard */}
-        <div style={{ background: '#0f1117', padding: '1rem', borderRadius: '8px', margin: '1rem 0' }}>
-           <h3 style={{ margin: '0 0 1rem 0', color: '#e2e8f0' }}>Queue Dashboard</h3>
-           <p style={{ marginBottom: '1rem', color: '#a0aec0' }}>Callers waiting: {queue.length}</p>
-           {queue.length === 0 && <p style={{ color: '#718096' }}>No active callers.</p>}
-           
-           <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-             {queue.map(q => (
-               <div key={q.session_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1a202c', padding: '0.8rem', borderRadius: '4px', marginBottom: '0.5rem' }}>
-                 <div>
-                   <p style={{ color: '#90cdf4', margin: 0 }}>📞 Caller ID: {q.caller_id}</p>
-                   <p style={{ color: '#a0aec0', fontSize: '0.8em', margin: 0 }}>Wait time: {q.wait_sec}s | Pos: {q.position}</p>
-                 </div>
-                 {/* Can manually accept from queue too */}
-                 <button onClick={() => acceptCall(q)} style={{ background: '#3182ce', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' }}>
-                   Accept
-                 </button>
-               </div>
-             ))}
-           </div>
-        </div>
+        {queueDashboard}
       </div>
     );
   }
@@ -252,6 +255,7 @@ export function ReceiverInterface() {
             />
             <RoomAudioRenderer />
           </LiveKitRoom>
+          {queueDashboard}
         </div>
       );
   }
