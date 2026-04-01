@@ -18,10 +18,34 @@ function ActiveRoomLayout({ onHardTeardown }) {
       console.log('Room natively disconnected, firing cleanup...');
       onHardTeardown();
     };
+
+    const handleData = (payload, participant, kind, topic) => {
+      try {
+        const text = new TextDecoder().decode(payload);
+        const data = JSON.parse(text);
+        if (data.action === 'play_tts') {
+          console.log("Playing TTS from backend:", data.text);
+          fetch('/tts/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
+            body: JSON.stringify({ text: data.text, voice: 'en_US-ryan-high' })
+          })
+          .then(res => res.blob())
+          .then(blob => {
+             const url = URL.createObjectURL(blob);
+             const a = new Audio(url);
+             a.play().catch(e => console.error("Audio block:", e));
+          }).catch(e => console.error("TTS fetch failed", e));
+        }
+      } catch (e) {} // skip non-json
+    };
     
     room.on('disconnected', handleDisconnect);
+    room.on('dataReceived', handleData);
+    
     return () => {
       room.off('disconnected', handleDisconnect);
+      room.off('dataReceived', handleData);
     };
   }, [room, onHardTeardown]);
 
