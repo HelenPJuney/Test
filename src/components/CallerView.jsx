@@ -331,6 +331,16 @@ function ActiveRoomView({ routingResult, onEnd }) {
   const room = useRoomContext();
   const participants = useParticipants();
   const agentConnected = participants.some(p => p.identity && p.identity.includes('helen-receiver'));
+  const activeAudioRef = useRef(null);
+
+  // Stop any playing TTS audio as soon as the agent connects
+  useEffect(() => {
+    if (agentConnected && activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      activeAudioRef.current.currentTime = 0;
+      activeAudioRef.current = null;
+    }
+  }, [agentConnected]);
 
   useEffect(() => {
     const handleData = (payload, _participant, _kind, topic) => {
@@ -346,10 +356,24 @@ function ActiveRoomView({ routingResult, onEnd }) {
           })
           .then(r => r.blob())
           .then(blob => {
+            if (agentConnected) return; // Check again in case state changed during fetch
+            
+            // Stop any existing audio before playing a new one
+            if (activeAudioRef.current) {
+              activeAudioRef.current.pause();
+            }
+            
             const url = URL.createObjectURL(blob);
             const audio = new Audio(url);
+            activeAudioRef.current = audio;
+            
             audio.play().catch(() => {});
-            audio.onended = () => URL.revokeObjectURL(url);
+            audio.onended = () => {
+              URL.revokeObjectURL(url);
+              if (activeAudioRef.current === audio) {
+                activeAudioRef.current = null;
+              }
+            };
           })
           .catch(e => console.warn('[TTS] Data channel play error:', e));
         }
