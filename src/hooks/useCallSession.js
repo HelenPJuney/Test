@@ -21,8 +21,8 @@ export function useCallSession() {
       
       setSessionData({ 
         token: data.token, 
-        url: 'wss://sch-natyyy4y.livekit.cloud', // Actual project LiveKit URL from original
-        roomName: 'helen-room', // Handled by token natively
+        url: data.url || 'wss://sch-natyyy4y.livekit.cloud',
+        roomName: data.room,
         sessionId: data.session_id
       });
       
