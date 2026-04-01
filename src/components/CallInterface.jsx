@@ -1,52 +1,58 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { 
   LiveKitRoom, 
   RoomAudioRenderer, 
   DisconnectButton,
   useRoomContext,
-  useParticipants
+  useParticipants,
+  useDataChannel
 } from '@livekit/components-react';
 
 function ActiveRoomLayout({ onHardTeardown }) {
   const room = useRoomContext();
   const participants = useParticipants();
   const agentConnected = participants.some(p => p.identity && p.identity.includes('helen-receiver'));
-  
-  // Hardened cleanup listener targeting strict room isolation logic
+
+  // Listen on the 'tts' topic from the backend's SendDataRequest
+  const onTtsMessage = useCallback((msg) => {
+    try {
+      const text = new TextDecoder().decode(msg.payload);
+      const data = JSON.parse(text);
+      if (data.action === 'play_tts' && data.text) {
+        console.log('[TTS] Playing:', data.text);
+        fetch('/tts/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
+          body: JSON.stringify({ text: data.text, voice: 'en_US-ryan-high' })
+        })
+        .then(res => {
+          if (!res.ok) throw new Error(`TTS endpoint error: ${res.status}`);
+          return res.blob();
+        })
+        .then(blob => {
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          audio.onended = () => URL.revokeObjectURL(url);
+          audio.play().catch(e => console.warn('[TTS] autoplay blocked:', e));
+        })
+        .catch(e => console.error('[TTS] fetch failed:', e));
+      }
+    } catch (e) {
+      console.warn('[TTS] parse error:', e);
+    }
+  }, []);
+
+  // Subscribe to 'tts' topic data channel
+  useDataChannel('tts', onTtsMessage);
+
+  // Cleanup on disconnect
   useEffect(() => {
     const handleDisconnect = () => {
-      console.log('Room natively disconnected, firing cleanup...');
+      console.log('Room disconnected, cleaning up...');
       onHardTeardown();
     };
-
-    const handleData = (payload, participant, kind, topic) => {
-      try {
-        const text = new TextDecoder().decode(payload);
-        const data = JSON.parse(text);
-        if (data.action === 'play_tts') {
-          console.log("Playing TTS from backend:", data.text);
-          fetch('/tts/speak', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
-            body: JSON.stringify({ text: data.text, voice: 'en_US-ryan-high' })
-          })
-          .then(res => res.blob())
-          .then(blob => {
-             const url = URL.createObjectURL(blob);
-             const a = new Audio(url);
-             a.play().catch(e => console.error("Audio block:", e));
-          }).catch(e => console.error("TTS fetch failed", e));
-        }
-      } catch (e) {} // skip non-json
-    };
-    
     room.on('disconnected', handleDisconnect);
-    room.on('dataReceived', handleData);
-    
-    return () => {
-      room.off('disconnected', handleDisconnect);
-      room.off('dataReceived', handleData);
-    };
+    return () => room.off('disconnected', handleDisconnect);
   }, [room, onHardTeardown]);
 
   return (
@@ -54,15 +60,17 @@ function ActiveRoomLayout({ onHardTeardown }) {
       {!agentConnected ? (
         <div className="status-queued">
           <h2>🕒 Waiting in Queue</h2>
-          <p>Please wait... (TTS estimated time will play shortly via real-time audio track)</p>
+          <p style={{ color: '#a78bfa' }}>
+            Please wait... you will hear an audio announcement shortly.
+          </p>
           <RoomAudioRenderer />
         </div>
       ) : (
         <div className="status-connected">
           <h2 style={{ color: '#56d364' }}>🟢 Connected to Agent</h2>
-          <div style={{ margin: '2rem 0', height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-         <p style={{color: '#a0aec0'}}>Audio Active</p>
-      </div>
+          <div style={{ margin: '2rem 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <p style={{ color: '#a0aec0' }}>Audio Active</p>
+          </div>
         </div>
       )}
       
