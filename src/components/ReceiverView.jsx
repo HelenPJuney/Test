@@ -118,6 +118,7 @@ function ActiveCallLayout({ onEnd, currentCall, updateAgentStatus }) {
 export function ReceiverView() {
   const [status, setStatus] = useState('offline'); // offline | online | connected
   const [selectedDept, setSelectedDept] = useState('All Departments'); // new state for agent's department
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [queue, setQueue] = useState([]);
   const [ringing, setRinging] = useState([]);
   const [tokenData, setTokenData] = useState({});
@@ -271,10 +272,7 @@ export function ReceiverView() {
             Select Department
           </label>
           <div 
-            onClick={() => {
-              const el = document.getElementById('dept-dropdown-list');
-              el.style.display = el.style.display === 'block' ? 'none' : 'block';
-            }}
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             style={{
               width: '100%', 
               padding: '0.9rem', 
@@ -289,12 +287,11 @@ export function ReceiverView() {
               alignItems: 'center'
             }}
           >
-            {selectedDept} <span>▼</span>
+            {selectedDept} <span>{isDropdownOpen ? '▲' : '▼'}</span>
           </div>
           <div 
-            id="dept-dropdown-list"
             style={{
-              display: 'none',
+              display: isDropdownOpen ? 'block' : 'none',
               position: 'absolute',
               top: '100%',
               left: 0,
@@ -313,7 +310,7 @@ export function ReceiverView() {
                 key={dept} 
                 onClick={() => { 
                   setSelectedDept(dept); 
-                  document.getElementById('dept-dropdown-list').style.display = 'none';
+                  setIsDropdownOpen(false);
                 }}
                 style={{
                   padding: '0.8rem 1rem',

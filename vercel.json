@@ -11,6 +11,14 @@
     {
       "source": "/scheduling/:path*",
       "destination": "https://bairnly-unvamped-billye.ngrok-free.dev/scheduling/:path*"
+    },
+    {
+      "source": "/ivr/:path*",
+      "destination": "https://bairnly-unvamped-billye.ngrok-free.dev/ivr/:path*"
+    },
+    {
+      "source": "/routing/:path*",
+      "destination": "https://bairnly-unvamped-billye.ngrok-free.dev/routing/:path*"
     }
   ]
 }
