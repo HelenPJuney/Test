@@ -29,7 +29,7 @@ function ActiveRoomLayout({ onHardTeardown }) {
         const data = JSON.parse(text);
         
         if (data.action === 'play_tts' && data.text) {
-          console.log('[TTS] Received announcement:', data.text);
+          console.log(`[TTS] Requesting audio for: "${data.text.substring(0, 40)}${data.text.length > 40 ? '...' : ''}"`);
           
           fetch('/tts/speak', {
             method: 'POST',
@@ -37,24 +37,35 @@ function ActiveRoomLayout({ onHardTeardown }) {
               'Content-Type': 'application/json',
               'ngrok-skip-browser-warning': '1' 
             },
-            body: JSON.stringify({ text: data.text, voice: 'en_US-ryan-high' })
+            body: JSON.stringify({ 
+              text: data.text, 
+              voice: 'en_US-ryan-high',
+              room_id: room.name
+            })
           })
-          .then(res => {
-            if (!res.ok) throw new Error(`TTS fetch error: ${res.status}`);
+          .then(async res => {
+            if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(`TTS fetch error: ${res.status} - ${errText}`);
+            }
+            console.log('[TTS] WAV received, playing...');
             return res.blob();
           })
           .then(blob => {
             const url = URL.createObjectURL(blob);
             const audio = new Audio(url);
             
-            // Try to play
             audio.play().catch(err => {
-              console.warn('[TTS] Autoplay blocked, will retry on next message. User must interact with page.', err);
+              console.warn('[TTS] Autoplay blocked or failed:', err);
+              // Store url in a global or state if we want to retry but usually user interaction is required
             });
             
-            audio.onended = () => URL.revokeObjectURL(url);
+            audio.onended = () => {
+                URL.revokeObjectURL(url);
+                console.log('[TTS] Playback finished');
+            };
           })
-          .catch(err => console.error('[TTS] Fetch failed:', err));
+          .catch(err => console.error('[TTS] Processing failed:', err));
         }
       } catch (err) {
         console.warn('[TTS] Data parse error:', err);
