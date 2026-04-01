@@ -39,10 +39,11 @@ function ActiveCallLayout({ onEnd, currentCall, updateAgentStatus }) {
     return () => room.off('disconnected', handleDisconnect);
   }, [room, onEnd]);
 
-  const sendCustomMessage = () => {
-    if (customMsg.trim()) {
-      updateAgentStatus('busy', customMsg);
-      setCustomMsg('');
+  const sendCustomMessage = (msgText) => {
+    const finalMsg = msgText || customMsg;
+    if (finalMsg.trim()) {
+      updateAgentStatus('busy', finalMsg);
+      if (!msgText) setCustomMsg('');
     }
   };
 
@@ -77,18 +78,25 @@ function ActiveCallLayout({ onEnd, currentCall, updateAgentStatus }) {
 
       {/* Queue announcement control */}
       <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-        Queue Announcement
+        Notify Waiting Callers
       </p>
+      
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+        <button className="btn badge-online" style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }} onClick={() => sendCustomMessage("Please wait 2 minutes.")}>Wait 2 Mins</button>
+        <button className="btn badge-online" style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }} onClick={() => sendCustomMessage("Please wait 5 minutes.")}>Wait 5 Mins</button>
+        <button className="btn badge-busy" style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }} onClick={() => sendCustomMessage("We are handling an emergency, thank you for holding.")}>Emergency Delay</button>
+      </div>
+
       <div className="custom-msg-row">
         <input
           className="custom-msg-input"
           type="text"
           value={customMsg}
           onChange={e => setCustomMsg(e.target.value)}
-          placeholder="e.g. 'I'll be with you in 5 minutes'"
+          placeholder="Or type custom announcement..."
           onKeyDown={e => e.key === 'Enter' && sendCustomMessage()}
         />
-        <button className="btn btn-primary" onClick={sendCustomMessage}>Send</button>
+        <button className="btn btn-primary" onClick={() => sendCustomMessage()}>Send</button>
       </div>
 
       <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
@@ -258,29 +266,69 @@ export function ReceiverView() {
           Select your department and go online to start receiving calls
         </p>
 
-        <div style={{ marginBottom: '2rem', textAlign: 'left', maxWidth: '300px', margin: '0 auto 2rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-            Monitor Department:
+        <div style={{ marginBottom: '2rem', textAlign: 'left', maxWidth: '300px', margin: '0 auto 2rem', position: 'relative' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+            Select Department
           </label>
-          <select 
-            value={selectedDept}
-            onChange={(e) => setSelectedDept(e.target.value)}
-            style={{ 
+          <div 
+            onClick={() => {
+              const el = document.getElementById('dept-dropdown-list');
+              el.style.display = el.style.display === 'block' ? 'none' : 'block';
+            }}
+            style={{
               width: '100%', 
-              padding: '0.75rem', 
+              padding: '0.9rem', 
               borderRadius: 'var(--radius-sm)',
               background: 'rgba(15, 20, 35, 0.8)',
               border: '1px solid var(--border-glass)',
               color: 'var(--text-primary)',
-              fontSize: '0.9rem',
-              outline: 'none',
-              cursor: 'pointer'
+              fontSize: '0.95rem',
+              cursor: 'pointer',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}
+          >
+            {selectedDept} <span>▼</span>
+          </div>
+          <div 
+            id="dept-dropdown-list"
+            style={{
+              display: 'none',
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              background: '#0a0d1a',
+              border: '1px solid var(--accent-cyan)',
+              borderRadius: 'var(--radius-sm)',
+              marginTop: '0.3rem',
+              zIndex: 50,
+              overflow: 'hidden',
+              boxShadow: '0 8px 16px rgba(0,0,0,0.5)'
             }}
           >
             {DEPARTMENTS.map(dept => (
-              <option key={dept} value={dept}>{dept}</option>
+              <div 
+                key={dept} 
+                onClick={() => { 
+                  setSelectedDept(dept); 
+                  document.getElementById('dept-dropdown-list').style.display = 'none';
+                }}
+                style={{
+                  padding: '0.8rem 1rem',
+                  cursor: 'pointer',
+                  borderBottom: '1px solid rgba(255,255,255,0.05)',
+                  background: selectedDept === dept ? 'rgba(0, 240, 255, 0.1)' : 'transparent',
+                  color: selectedDept === dept ? 'var(--accent-cyan)' : 'var(--text-primary)',
+                }}
+                onMouseEnter={e => e.target.style.background = 'rgba(0, 240, 255, 0.15)'}
+                onMouseLeave={e => e.target.style.background = selectedDept === dept ? 'rgba(0, 240, 255, 0.1)' : 'transparent'}
+              >
+                {dept}
+              </div>
             ))}
-          </select>
+          </div>
         </div>
 
         <button className="btn btn-success" onClick={goOnline} id="go-online-btn" style={{ padding: '0.8rem 2rem', fontSize: '1rem' }}>

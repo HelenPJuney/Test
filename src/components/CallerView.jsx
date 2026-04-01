@@ -29,19 +29,11 @@ function AudioVisualizer({ state, icon }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   IVR Active Room — The main call experience inside LiveKitRoom
+   IVR Flow — Runs locally before connecting to LiveKit
    Handles: TTS playback, speech recognition, Gemini classification, routing
    ═══════════════════════════════════════════════════════════════════════════════ */
-function IvrActiveRoom({ sessionData, onRouted, onEnd }) {
-  const room = useRoomContext();
-  const participants = useParticipants();
-  const agentConnected = participants.some(
-    p => p.identity && p.identity.includes('helen-receiver')
-  );
-
-  // IVR state machine
+function IvrFlow({ onRouted, onEnd }) {
   const [ivrState, setIvrState] = useState('greeting');
-  // greeting → listening → confirming → classifying → routing → routed | connected
   const [transcript, setTranscript] = useState('');
   const [statusText, setStatusText] = useState('Connecting...');
   const [detailText, setDetailText] = useState('');
@@ -81,6 +73,8 @@ function IvrActiveRoom({ sessionData, onRouted, onEnd }) {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       console.warn('Web Speech API not supported');
       setDetailText('Speech recognition not available in this browser.');
+      // Auto fallback if no speech API
+      setTimeout(() => classifyAndRoute('Help me please'), 3000);
       return;
     }
 
@@ -93,7 +87,6 @@ function IvrActiveRoom({ sessionData, onRouted, onEnd }) {
     let finalTranscript = '';
 
     recognition.onresult = (event) => {
-      // Reset silence timer on each result
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
       let interim = '';
@@ -106,10 +99,8 @@ function IvrActiveRoom({ sessionData, onRouted, onEnd }) {
       }
       setTranscript(finalTranscript + interim);
 
-      // 5-second silence threshold
       silenceTimerRef.current = setTimeout(() => {
         if (finalTranscript.trim().length > 5) {
-          // Got enough speech — move to confirmation
           recognition.stop();
           isListeningRef.current = false;
           setTranscript(finalTranscript.trim());
@@ -126,7 +117,6 @@ function IvrActiveRoom({ sessionData, onRouted, onEnd }) {
     };
 
     recognition.onend = () => {
-      // If we're still in listening state, restart (continuous mode can stop randomly)
       if (isListeningRef.current) {
         try { recognition.start(); } catch (e) { /* ignore */ }
       }
@@ -143,15 +133,11 @@ function IvrActiveRoom({ sessionData, onRouted, onEnd }) {
     setStatusText('Confirming your request...');
     setDetailText('');
 
-    // Play "That's it sir?" TTS
     await playTtsFromEndpoint('/ivr/confirmation-prompt');
-
-    // Brief listen for "yes" / "no" — simplified: auto-proceed after 4s
     setDetailText('Say "yes" to confirm, or continue speaking...');
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      // No speech API — just auto-confirm
       setTimeout(() => classifyAndRoute(currentTranscript), 3000);
       return;
     }
@@ -177,17 +163,15 @@ function IvrActiveRoom({ sessionData, onRouted, onEnd }) {
         clearTimeout(autoTimer);
         confirmRec.stop();
 
-        if (text.includes('yes') || text.includes('yeah') || text.includes('correct') || text.includes('right')) {
+        if (text.includes('yes') || text.includes('yeah') || text.includes('correct') || text.includes('right') || text.includes('yep')) {
           classifyAndRoute(currentTranscript);
         } else if (text.includes('no') || text.includes('nah') || text.includes('wait')) {
-          // Go back to listening
           setIvrState('listening');
           setStatusText('Listening...');
           setDetailText('Please describe your issue.');
           setTranscript('');
           startListening();
         } else {
-          // Ambiguous — append and route
           classifyAndRoute(currentTranscript + ' ' + text);
         }
       }
@@ -216,6 +200,9 @@ function IvrActiveRoom({ sessionData, onRouted, onEnd }) {
     setStatusText('Analyzing your request...');
     setDetailText('Our AI is determining the best department for you.');
 
+    // Generate a temporary session_id for the IVR processing (not the final LiveKit session)
+    const tempSessionId = 'temp-' + Math.random().toString(36).substr(2, 9);
+    
     try {
       const res = await fetch(`${API}/ivr/process`, {
         method: 'POST',
@@ -224,10 +211,10 @@ function IvrActiveRoom({ sessionData, onRouted, onEnd }) {
           'ngrok-skip-browser-warning': '1',
         },
         body: JSON.stringify({
-          session_id: sessionData.sessionId,
-          room_id: sessionData.roomName,
+          session_id: tempSessionId,
+          room_id: 'ivr-room',
           transcript: finalText,
-          caller_id: sessionData.identity,
+          caller_id: 'web-caller',
         }),
       });
 
@@ -239,11 +226,9 @@ function IvrActiveRoom({ sessionData, onRouted, onEnd }) {
       setStatusText(`Routing to ${data.department}`);
       setDetailText(data.routing_message);
 
-      // Play routing announcement TTS
       const deptSlug = data.department.toLowerCase().replace(/\s+/g, '-');
       await playTtsFromEndpoint(`/ivr/routing-audio/${deptSlug}`);
 
-      // Signal parent that routing is complete
       onRouted(data);
 
     } catch (err) {
@@ -251,32 +236,30 @@ function IvrActiveRoom({ sessionData, onRouted, onEnd }) {
       setStatusText('Routing to Support Department');
       setDetailText('Connecting you to general support.');
       
-      // Fallback: route to support
       const fallback = { department: 'Support Department', urgency: 3, routing_message: 'Routing to Support Department.' };
       setRoutingResult(fallback);
       setIvrState('routing');
+      
+      await playTtsFromEndpoint(`/ivr/routing-audio/support-department`);
       onRouted(fallback);
     }
-  }, [sessionData, playTtsFromEndpoint, onRouted]);
+  }, [playTtsFromEndpoint, onRouted]);
 
   // ── Startup: Play greeting then start listening ────────────────────────
   useEffect(() => {
     let mounted = true;
 
     async function startIvr() {
-      // Small delay for room to connect
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 800));
       if (!mounted) return;
 
       setIvrState('greeting');
       setStatusText('AI Assistant');
       setDetailText('Playing greeting...');
 
-      // Play pre-cached greeting
       await playTtsFromEndpoint('/ivr/greeting');
       if (!mounted) return;
 
-      // Transition to listening
       setIvrState('listening');
       setStatusText('Listening...');
       setDetailText('Please describe your issue. I\'ll route you to the best department.');
@@ -295,7 +278,60 @@ function IvrActiveRoom({ sessionData, onRouted, onEnd }) {
     };
   }, []);
 
-  // ── Handle TTS data channel messages (queue announcements) ─────────────
+  const vizState = {
+    greeting: 'speaking',
+    listening: 'listening',
+    confirming: 'speaking',
+    classifying: 'routing',
+    routing: 'routing',
+  }[ivrState] || 'idle';
+
+  const vizIcon = {
+    greeting: '🤖',
+    listening: '🎙️',
+    confirming: '❓',
+    classifying: '🧠',
+    routing: '✨',
+  }[ivrState] || '🎙️';
+
+  return (
+    <div className="ivr-screen glass-card-static">
+      <AudioVisualizer state={vizState} icon={vizIcon} />
+
+      <p className="ivr-status-text">{statusText}</p>
+      <p className="ivr-detail-text">{detailText}</p>
+
+      {(ivrState === 'listening' || ivrState === 'confirming' || ivrState === 'classifying') && transcript && (
+        <div className="ivr-transcript-box">
+          <p className="ivr-transcript-label">Your words</p>
+          <p className="ivr-transcript-text">"{transcript}"</p>
+        </div>
+      )}
+
+      {routingResult && ivrState === 'routing' && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <span className="incoming-dept-badge" style={{ fontSize: '0.85rem', padding: '0.4rem 1rem' }}>
+            {routingResult.department}
+          </span>
+          <UrgencyBar level={routingResult.urgency} />
+        </div>
+      )}
+
+      <button className="btn btn-danger" onClick={onEnd}>
+        ✕ Cancel Calling
+      </button>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ActiveRoomView — Rendered AFTER routing, when connected to LiveKit
+   ═══════════════════════════════════════════════════════════════════════════════ */
+function ActiveRoomView({ routingResult, onEnd }) {
+  const room = useRoomContext();
+  const participants = useParticipants();
+  const agentConnected = participants.some(p => p.identity && p.identity.includes('helen-receiver'));
+
   useEffect(() => {
     const handleData = (payload, _participant, _kind, topic) => {
       if (agentConnected || topic !== 'tts') return;
@@ -324,67 +360,30 @@ function IvrActiveRoom({ sessionData, onRouted, onEnd }) {
     return () => room.off(RoomEvent.DataReceived, handleData);
   }, [room, agentConnected]);
 
-  // ── If agent connects (after routing), switch to connected view ────────
-  if (agentConnected && ivrState !== 'connected') {
-    setIvrState('connected');
-    setStatusText('Connected to Agent');
-    setDetailText('You are now speaking with a live agent.');
-  }
-
-  // ── Determine visualizer state ─────────────────────────────────────────
-  const vizState = {
-    greeting: 'speaking',
-    listening: 'listening',
-    confirming: 'speaking',
-    classifying: 'routing',
-    routing: 'routing',
-    routed: 'routing',
-    connected: 'listening',
-  }[ivrState] || 'idle';
-
-  const vizIcon = {
-    greeting: '🤖',
-    listening: '🎙️',
-    confirming: '❓',
-    classifying: '🧠',
-    routing: '✨',
-    connected: '🟢',
-  }[ivrState] || '🎙️';
-
   return (
     <div className="ivr-screen glass-card-static">
-      <AudioVisualizer state={vizState} icon={vizIcon} />
-
-      <p className="ivr-status-text">{statusText}</p>
-      <p className="ivr-detail-text">{detailText}</p>
-
-      {/* Live transcript box */}
-      {(ivrState === 'listening' || ivrState === 'confirming' || ivrState === 'classifying') && transcript && (
-        <div className="ivr-transcript-box">
-          <p className="ivr-transcript-label">Your words</p>
-          <p className="ivr-transcript-text">"{transcript}"</p>
-        </div>
+      <AudioVisualizer state={agentConnected ? 'listening' : 'routing'} icon={agentConnected ? '🟢' : '⏳'} />
+      
+      {!agentConnected ? (
+        <>
+          <p className="ivr-status-text">Waiting in {routingResult?.department} Queue</p>
+          <p className="ivr-detail-text">Please hold for the next available agent. Audio announcements will play automatically.</p>
+          {routingResult && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <span className="incoming-dept-badge" style={{ fontSize: '0.85rem', padding: '0.4rem 1rem' }}>
+                {routingResult.department}
+              </span>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="ivr-status-text" style={{ color: 'var(--accent-emerald)' }}>Connected to Agent</p>
+          <p className="ivr-detail-text">You are now speaking with a live agent.</p>
+        </>
       )}
 
-      {/* Routing result badge */}
-      {routingResult && (ivrState === 'routing' || ivrState === 'routed') && (
-        <div style={{ marginBottom: '1.5rem' }}>
-          <span className="incoming-dept-badge" style={{ fontSize: '0.85rem', padding: '0.4rem 1rem' }}>
-            {routingResult.department}
-          </span>
-          <UrgencyBar level={routingResult.urgency} />
-        </div>
-      )}
-
-      {/* Connected state */}
-      {ivrState === 'connected' && (
-        <div className="connected-badge" style={{ justifyContent: 'center' }}>
-          <span className="dot" />
-          Speaking with Agent
-        </div>
-      )}
-
-      <button className="btn btn-danger" onClick={onEnd} id="end-call-btn">
+      <button className="btn btn-danger" onClick={() => { room.disconnect(); onEnd(); }}>
         ✕ End Call
       </button>
     </div>
@@ -414,32 +413,9 @@ function UrgencyBar({ level }) {
    States: idle → calling (IVR) → routed/connected
    ═══════════════════════════════════════════════════════════════════════════════ */
 export function CallerView() {
-  const [phase, setPhase] = useState('idle'); // idle | requesting | active | error
+  const [phase, setPhase] = useState('idle'); // idle | ivr | requesting | active | error
   const [sessionData, setSessionData] = useState({});
   const [error, setError] = useState('');
-
-  const startCall = async () => {
-    setPhase('requesting');
-    setError('');
-    try {
-      const res = await fetch(`${API}/livekit/caller-token?caller_id=web-caller`, {
-        headers: { 'ngrok-skip-browser-warning': '1' },
-      });
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
-      const data = await res.json();
-      setSessionData({
-        token: data.token,
-        url: data.url || data.livekit_url,
-        roomName: data.room,
-        sessionId: data.session_id,
-        identity: data.identity,
-      });
-      setPhase('active');
-    } catch (e) {
-      setError(e.message);
-      setPhase('error');
-    }
-  };
 
   const endCall = useCallback(() => {
     if (sessionData.sessionId) {
@@ -472,7 +448,7 @@ export function CallerView() {
           Call our AI assistant. It will understand your issue and
           route you to the perfect department — instantly.
         </p>
-        <button className="call-button" onClick={startCall} id="start-call-btn">
+        <button className="call-button" onClick={() => setPhase('ivr')} id="start-call-btn">
           📞
         </button>
         <p className="call-button-label">Tap to call</p>
@@ -480,14 +456,35 @@ export function CallerView() {
     );
   }
 
-  // ── Requesting ─────────────────────────────────────────────────────────
-  if (phase === 'requesting') {
+  // ── IVR Phase: Runs locally without LiveKit ────────────────────────────
+  if (phase === 'ivr') {
     return (
-      <div className="caller-idle glass-card-static">
-        <AudioVisualizer state="routing" icon="⏳" />
-        <p className="ivr-status-text">Connecting...</p>
-        <p className="ivr-detail-text">Establishing secure connection</p>
-      </div>
+      <IvrFlow 
+        onRouted={async (routingResult) => {
+          try {
+            // Now that we have the intent, get the LiveKit token and join queue!
+            setPhase('requesting');
+            const res = await fetch(`${API}/livekit/caller-token?caller_id=web-caller&department=${encodeURIComponent(routingResult.department)}&urgency=${routingResult.urgency}`, {
+              headers: { 'ngrok-skip-browser-warning': '1' },
+            });
+            if (!res.ok) throw new Error(`Server error: ${res.status}`);
+            const data = await res.json();
+            setSessionData({
+              token: data.token,
+              url: data.url || data.livekit_url,
+              roomName: data.room,
+              sessionId: data.session_id,
+              identity: data.identity,
+              routingResult: routingResult
+            });
+            setPhase('active');
+          } catch (e) {
+            setError(e.message);
+            setPhase('error');
+          }
+        }} 
+        onEnd={endCall} 
+      />
     );
   }
 
@@ -503,9 +500,8 @@ export function CallerView() {
         onDisconnected={endCall}
       >
         <RoomAudioRenderer />
-        <IvrActiveRoom
-          sessionData={sessionData}
-          onRouted={handleRouted}
+        <ActiveRoomView
+          routingResult={sessionData.routingResult}
           onEnd={endCall}
         />
       </LiveKitRoom>
