@@ -3,11 +3,14 @@ import {
   LiveKitRoom, 
   RoomAudioRenderer, 
   DisconnectButton,
-  useRoomContext
+  useRoomContext,
+  useParticipants
 } from '@livekit/components-react';
 
-function ActiveRoomLayout({ status, onHardTeardown }) {
+function ActiveRoomLayout({ onHardTeardown }) {
   const room = useRoomContext();
+  const participants = useParticipants();
+  const agentConnected = participants.some(p => p.identity && p.identity.includes('helen-receiver'));
   
   // Hardened cleanup listener targeting strict room isolation logic
   useEffect(() => {
@@ -24,7 +27,7 @@ function ActiveRoomLayout({ status, onHardTeardown }) {
 
   return (
     <div className="call-interface">
-      {status === 'queued' ? (
+      {!agentConnected ? (
         <div className="status-queued">
           <h2>🕒 Waiting in Queue</h2>
           <p>Please wait... (TTS estimated time will play shortly via real-time audio track)</p>
