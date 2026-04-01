@@ -3,7 +3,7 @@ import { useState, useCallback } from 'react';
 // Central state machine hook for session and room logic
 export function useCallSession() {
   const [status, setStatus] = useState('idle'); // idle | requesting | queued | connected | error
-  const [sessionData, setSessionData] = useState({ token: null, url: null, roomName: null });
+  const [sessionData, setSessionData] = useState({ token: null, url: null, roomName: null, sessionId: null });
   const [errorMsg, setErrorMsg] = useState('');
 
   const startCall = async (agentId) => {
@@ -11,26 +11,22 @@ export function useCallSession() {
       setStatus('requesting');
       setErrorMsg('');
       
-      // Send REST request configuring isolation & queueing
-      // Replace with your actual backend endpoint.
-      // Expected response: { url: 'wss://...', token: '...', status: 'queued' | 'connected', roomName: 'uuid-x' }
-      const response = await fetch('/api/call/request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agent_id: agentId })
+      // Use the actual backend endpoint for caller token
+      const response = await fetch(`/livekit/caller-token?department=${agentId}`, {
+        headers: { 'ngrok-skip-browser-warning': '1' } // Required for ngrok bypass
       });
 
       if (!response.ok) throw new Error(`Backend error: ${response.status}`);
       const data = await response.json();
       
-      // Setting unique room tokens enforcing strictly isolated session per caller
       setSessionData({ 
         token: data.token, 
-        url: data.url, 
-        roomName: data.roomName 
+        url: 'wss://sch-natyyy4y.livekit.cloud', // Actual project LiveKit URL from original
+        roomName: 'helen-room', // Handled by token natively
+        sessionId: data.session_id
       });
       
-      setStatus(data.status === 'queued' ? 'queued' : 'connected');
+      setStatus(data.wait_seconds > 0 ? 'queued' : 'connected');
     } catch (error) {
       console.error('Call failed to start:', error);
       setErrorMsg(error.message);
@@ -39,11 +35,17 @@ export function useCallSession() {
   };
 
   const endCall = useCallback(() => {
-    // 100% Cleanup logic scrub
-    setSessionData({ token: null, url: null, roomName: null });
+    if (sessionData.sessionId) {
+        // Cleanup caller queue on exit
+        fetch(`/livekit/caller-queue/${sessionData.sessionId}`, {
+            method: 'DELETE',
+            headers: { 'ngrok-skip-browser-warning': '1' }
+        }).catch(() => {});
+    }
+    setSessionData({ token: null, url: null, roomName: null, sessionId: null });
     setStatus('idle');
     setErrorMsg('');
-  }, []);
+  }, [sessionData.sessionId]);
 
   return { status, setStatus, sessionData, errorMsg, startCall, endCall };
 }

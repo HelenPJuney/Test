@@ -1,10 +1,11 @@
 import React from 'react';
 
-// Dynamic Agent data source
+// Added General Call (AI Router) and Categories mapping precisely to their prompt requests
 const agents = [
-  { id: 'agent-1', name: 'Sales Support AI', avatar: '💼', desc: 'Pre-sales inquiries & pricing' },
-  { id: 'agent-2', name: 'Tech Support AI', avatar: '🛠️', desc: 'Troubleshooting & technical help' },
-  { id: 'agent-3', name: 'Billing AI', avatar: '💳', desc: 'Invoice & account management' }
+  { id: 'general', name: 'General AI Agent', avatar: '🤖', desc: 'Faster Whisper Transcribe & LLM Router' },
+  { id: 'sales', name: 'Sales Support AI', avatar: '💼', desc: 'Pre-sales inquiries & pricing' },
+  { id: 'tech', name: 'Tech Support AI', avatar: '🛠️', desc: 'Troubleshooting & technical help' },
+  { id: 'billing', name: 'Billing AI', avatar: '💳', desc: 'Invoice & account management' }
 ];
 
 export function AgentList({ onCallAgent, disabled }) {
@@ -19,6 +20,7 @@ export function AgentList({ onCallAgent, disabled }) {
             className="call-btn" 
             onClick={() => onCallAgent(agent.id)}
             disabled={disabled}
+            style={agent.id === 'general' ? { background: '#2ea043' } : {}}
           >
             Call {agent.name.split(' ')[0]}
           </button>
