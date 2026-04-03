@@ -424,6 +424,7 @@ export function AgentDashboard() {
           body: JSON.stringify({
             outbound_id: outboundId,
             user_email: callInfo.userEmail,
+            department: callInfo.department,
             agent_identity: agentIdentity,
           }),
         });
