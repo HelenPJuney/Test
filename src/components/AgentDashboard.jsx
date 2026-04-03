@@ -23,11 +23,25 @@ const DEPT_OPTIONS = [
    ═══════════════════════════════════════════════════════════════════════════════ */
 function ActiveCallView({ callInfo, onEndCall }) {
   const room = useRoomContext();
+  const [ringing, setRinging] = useState(14);
+  const isOutbound = callInfo.sessionId && callInfo.sessionId.startsWith('outbound-');
+  const participantCount = room.participants ? Array.from(room.participants.values()).length : 0;
 
-  const handleEnd = useCallback(() => {
+  const handleEnd = useCallback((noAnswer = false) => {
     room.disconnect();
-    onEndCall();
+    onEndCall(noAnswer);
   }, [room, onEndCall]);
+
+  useEffect(() => {
+    if (!isOutbound) return;
+    if (participantCount > 0) return; // someone picked up!
+    if (ringing <= 0) {
+      handleEnd(true); // 14s elapsed, no one answered
+      return;
+    }
+    const t = setTimeout(() => setRinging(r => r - 1), 1000);
+    return () => clearTimeout(t);
+  }, [isOutbound, participantCount, ringing, handleEnd]);
 
   return (
     <div className="incoming-call-popup" style={{ borderColor: 'rgba(52, 211, 153, 0.4)', background: 'linear-gradient(135deg, rgba(52, 211, 153, 0.08), rgba(34, 211, 238, 0.08))' }}>
@@ -50,8 +64,13 @@ function ActiveCallView({ callInfo, onEndCall }) {
           </div>
         </div>
       </div>
-      <div className="incoming-actions">
-        <button className="btn btn-danger" onClick={handleEnd}>
+      <div className="incoming-actions" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        {isOutbound && participantCount === 0 && (
+          <div style={{ fontSize: '0.85rem', color: 'var(--accent-amber)', textAlign: 'center', fontWeight: 'bold' }}>
+            Ringing... {ringing}s
+          </div>
+        )}
+        <button className="btn btn-danger" onClick={() => handleEnd(false)}>
           ✕ End Call
         </button>
       </div>
@@ -394,16 +413,30 @@ export function AgentDashboard() {
   }, [agentIdentity, agentName, department]);
 
   // ── End call ─────────────────────────────────────────────────────────────
-  const handleEndCall = useCallback(async () => {
+  const handleEndCall = useCallback(async (isNoAnswer = false) => {
     try {
-      await fetch(`${API}/cc/agent/end-call`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
-        body: JSON.stringify({
-          agent_identity: agentIdentity,
-          session_id: callInfo.sessionId,
-        }),
-      });
+      if (isNoAnswer && callInfo.sessionId?.startsWith('outbound-')) {
+        // Send to no-answer API so it triggers the "missed you" email
+        const outboundId = parseInt(callInfo.sessionId.replace('outbound-', ''), 10);
+        await fetch(`${effectiveAPI}/cc/outbound/no-answer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
+          body: JSON.stringify({
+            outbound_id: outboundId,
+            user_email: callInfo.userEmail,
+            agent_identity: agentIdentity,
+          }),
+        });
+      } else {
+        await fetch(`${effectiveAPI}/cc/agent/end-call`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
+          body: JSON.stringify({
+            agent_identity: agentIdentity,
+            session_id: callInfo.sessionId,
+          }),
+        });
+      }
     } catch (err) {
       console.error('End call error:', err);
     }
