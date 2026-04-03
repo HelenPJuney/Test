@@ -192,9 +192,17 @@ export function AgentDashboard() {
   const [callUrl, setCallUrl] = useState('');
   const [callInfo, setCallInfo] = useState({});
 
+  // UI state
+  const [activeTab, setActiveTab] = useState('queue'); // 'queue' | 'agents' | 'history'
+  const [historyRecords, setHistoryRecords] = useState([]);
+
   const wsRef = useRef(null);
   const pollTimerRef = useRef(null);
   const agentPollTimerRef = useRef(null);
+  const agentIdentityRef = useRef(''); // ← always up-to-date, avoids stale closure in WS handler
+
+  // Keep ref in sync with state
+  useEffect(() => { agentIdentityRef.current = agentIdentity; }, [agentIdentity]);
 
   const effectiveAPI = backendOverride || API;
   const effectiveWS = effectiveAPI ? (effectiveAPI.replace(/^http/, 'ws') + '/ws/events') : WS_URL;
@@ -312,37 +320,37 @@ export function AgentDashboard() {
         const host = window.location.host.includes('vercel.app') ? 'localhost:8000' : window.location.host;
         targetWs = `${proto}//${host}/ws/events`;
       }
-      
-      console.log("Connecting to WebSocket:", targetWs);
+
+      console.log('[WS] Connecting to:', targetWs, '| identity:', agentIdentityRef.current);
       ws = new WebSocket(targetWs);
 
-      ws.onopen = () => setWsStatus('connected');
+      ws.onopen = () => {
+        console.log('[WS] Connected');
+        setWsStatus('connected');
+      };
+
+      ws.onerror = () => setWsStatus('error');
+
       ws.onclose = () => {
         setWsStatus('reconnecting');
-        setTimeout(() => (phase === 'online' || phase === 'in-call') && connectWs(), 3000);
+        setTimeout(() => {
+          if (wsRef.current === ws) connectWs(); // only reconnect if still the active ws
+        }, 3000);
       };
-      ws.onerror = () => setWsStatus('error');
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          console.log('[WS] msg:', data.type, '| target:', data.target_agent, '| me:', agentIdentityRef.current);
           if (
             data.type === 'outbound_callback' &&
-            data.target_agent === agentIdentity &&
-            phase === 'online'
+            data.target_agent === agentIdentityRef.current && // ← use ref, never stale
+            agentIdentityRef.current !== ''
           ) {
+            console.log('[WS] ✅ Outbound popup triggered!');
             setOutboundPopup(data);
           }
-        } catch (e) { /* ignore */ }
-      };
-
-      ws.onclose = () => {
-        // Reconnect after 3s
-        setTimeout(() => {
-          if (phase === 'online' || phase === 'in-call') {
-            connectWs();
-          }
-        }, 3000);
+        } catch (e) { /* ignore parse errors */ }
       };
 
       wsRef.current = ws;
@@ -352,8 +360,9 @@ export function AgentDashboard() {
 
     return () => {
       if (ws) ws.close();
+      wsRef.current = null;
     };
-  }, [phase, agentIdentity]);
+  }, [phase, agentIdentity, effectiveWS]);
 
   // ── Accept call from queue ───────────────────────────────────────────────
   const handleAcceptCall = useCallback(async (caller) => {
@@ -453,10 +462,30 @@ export function AgentDashboard() {
     setOutboundPopup(null);
   }, [agentIdentity]);
 
+  // ── History polling ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (phase !== 'online' && phase !== 'in-call') return;
+    const fetchHistory = async () => {
+      try {
+        const res = await fetch(
+          `${effectiveAPI}/cc/outbound/history?department=${encodeURIComponent(department)}&limit=30`,
+          { headers: { 'ngrok-skip-browser-warning': '1' } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setHistoryRecords(data.history || []);
+        }
+      } catch (e) { /* ignore */ }
+    };
+    fetchHistory();
+    const iv = setInterval(fetchHistory, 10000); // refresh every 10s
+    return () => clearInterval(iv);
+  }, [phase, department, effectiveAPI]);
+
   // ── Resume outbound ──────────────────────────────────────────────────────
   const handleResume = useCallback(async () => {
     try {
-      await fetch(`${API}/cc/outbound/resume`, {
+      await fetch(`${effectiveAPI}/cc/outbound/resume`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
         body: JSON.stringify({ agent_identity: agentIdentity }),
@@ -577,77 +606,157 @@ export function AgentDashboard() {
       {/* ── Snooze Widget ───────────────────────────────────────────────── */}
       <SnoozeWidget snoozeUntil={snoozeUntil} onResume={handleResume} />
 
-      {/* ── Department Agents ───────────────────────────────────────────── */}
-      <div className="glass-card-static" style={{ marginBottom: '1.5rem' }}>
-        <div className="queue-dashboard-title">
-          <h3>Department Agents</h3>
-          <span className="queue-count-badge">{deptAgents.length} registered</span>
-        </div>
-        <div className="agent-list">
-          {deptAgents.length === 0 && (
-            <div className="queue-empty">No agents registered in this department</div>
-          )}
-          {deptAgents.map((a) => (
-            <div key={a.agent_identity} className="agent-list-item">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <span className="agent-seq-badge" style={{ minWidth: '1.8rem', textAlign: 'center', padding: '0.2rem 0.5rem' }}>
-                  {a.sequence_number}
-                </span>
-                <span className="agent-list-name">
-                  {a.agent_name}
-                  {a.agent_identity === agentIdentity ? ' (You)' : ''}
-                </span>
-              </div>
-              <span className={`agent-status-badge ${a.status === 'online' ? 'badge-online' : a.status === 'busy' ? 'badge-busy' : 'badge-offline'}`}>
-                <span
-                  className="status-dot"
-                  style={{
-                    background:
-                      a.status === 'online' ? 'var(--accent-emerald)' :
-                      a.status === 'busy' ? 'var(--accent-amber)' :
-                      'var(--text-muted)',
-                    width: '6px', height: '6px', animation: 'none',
-                  }}
-                />
-                {a.status === 'online' ? 'Online' : a.status === 'busy' ? 'On a call' : a.status}
+      {/* ── Tab Nav ─────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
+        {[['queue', '📞 Queue'], ['agents', '👥 Agents'], ['history', '📋 History']].map(([tab, label]) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: '0.4rem 0.9rem',
+              borderRadius: '8px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              background: activeTab === tab ? 'rgba(34,211,238,0.18)' : 'rgba(255,255,255,0.06)',
+              color: activeTab === tab ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+              borderBottom: activeTab === tab ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+              transition: 'all 0.2s',
+            }}
+          >
+            {label}
+            {tab === 'queue' && queueCallers.length > 0 && (
+              <span style={{ marginLeft: '0.4rem', background: 'var(--accent-cyan)', color: '#000', borderRadius: '10px', padding: '0 5px', fontSize: '0.72rem' }}>
+                {queueCallers.length}
               </span>
-            </div>
-          ))}
-        </div>
+            )}
+            {tab === 'history' && historyRecords.filter(r => r.status === 'pending').length > 0 && (
+              <span style={{ marginLeft: '0.4rem', background: 'var(--accent-amber)', color: '#000', borderRadius: '10px', padding: '0 5px', fontSize: '0.72rem' }}>
+                {historyRecords.filter(r => r.status === 'pending').length}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* ── Call Queue ───────────────────────────────────────────────────── */}
-      <div className="glass-card-static">
-        <div className="queue-dashboard-title">
-          <h3>Call Queue — {department}</h3>
-          <span className="queue-count-badge">{queueCallers.length} waiting</span>
+      {/* ── Queue Tab ────────────────────────────────────────────────────── */}
+      {activeTab === 'queue' && (
+        <div className="glass-card-static">
+          <div className="queue-dashboard-title">
+            <h3>Call Queue — {department}</h3>
+            <span className="queue-count-badge">{queueCallers.length} waiting</span>
+          </div>
+          <div className="queue-list">
+            {queueCallers.length === 0 && (
+              <div className="queue-empty">🎉 No callers waiting — all clear!</div>
+            )}
+            {queueCallers.map((caller) => (
+              <div key={caller.session_id} className="queue-item">
+                <div className="queue-item-info">
+                  <span className="queue-caller-id">📞 {caller.caller_id}</span>
+                  <span className="queue-meta">
+                    #{caller.position} · Waiting {caller.wait_sec}s
+                    {caller.user_email && ` · ${caller.user_email}`}
+                  </span>
+                </div>
+                {phase === 'online' && (
+                  <button
+                    className="btn btn-success"
+                    onClick={() => handleAcceptCall(caller)}
+                    style={{ fontSize: '0.78rem', padding: '0.4rem 0.8rem' }}
+                  >
+                    ✓ Accept
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="queue-list">
-          {queueCallers.length === 0 && (
-            <div className="queue-empty">🎉 No callers waiting — all clear!</div>
-          )}
-          {queueCallers.map((caller) => (
-            <div key={caller.session_id} className="queue-item">
-              <div className="queue-item-info">
-                <span className="queue-caller-id">📞 {caller.caller_id}</span>
-                <span className="queue-meta">
-                  #{caller.position} · Waiting {caller.wait_sec}s
-                  {caller.user_email && ` · ${caller.user_email}`}
+      )}
+
+      {/* ── Agents Tab ───────────────────────────────────────────────────── */}
+      {activeTab === 'agents' && (
+        <div className="glass-card-static">
+          <div className="queue-dashboard-title">
+            <h3>Department Agents</h3>
+            <span className="queue-count-badge">{deptAgents.length} registered</span>
+          </div>
+          <div className="agent-list">
+            {deptAgents.length === 0 && (
+              <div className="queue-empty">No agents registered in this department</div>
+            )}
+            {deptAgents.map((a) => (
+              <div key={a.agent_identity} className="agent-list-item">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <span className="agent-seq-badge" style={{ minWidth: '1.8rem', textAlign: 'center', padding: '0.2rem 0.5rem' }}>
+                    {a.sequence_number}
+                  </span>
+                  <span className="agent-list-name">
+                    {a.agent_name}
+                    {a.agent_identity === agentIdentity ? ' (You)' : ''}
+                  </span>
+                </div>
+                <span className={`agent-status-badge ${a.status === 'online' ? 'badge-online' : a.status === 'busy' ? 'badge-busy' : 'badge-offline'}`}>
+                  <span
+                    className="status-dot"
+                    style={{
+                      background:
+                        a.status === 'online' ? 'var(--accent-emerald)' :
+                        a.status === 'busy' ? 'var(--accent-amber)' :
+                        'var(--text-muted)',
+                      width: '6px', height: '6px', animation: 'none',
+                    }}
+                  />
+                  {a.status === 'online' ? 'Online' : a.status === 'busy' ? 'On a call' : a.status}
                 </span>
               </div>
-              {phase === 'online' && (
-                <button
-                  className="btn btn-success"
-                  onClick={() => handleAcceptCall(caller)}
-                  style={{ fontSize: '0.78rem', padding: '0.4rem 0.8rem' }}
-                >
-                  ✓ Accept
-                </button>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ── History Tab ──────────────────────────────────────────────────── */}
+      {activeTab === 'history' && (
+        <div className="glass-card-static">
+          <div className="queue-dashboard-title">
+            <h3>Callback History</h3>
+            <span className="queue-count-badge">{historyRecords.length} records</span>
+          </div>
+          <div className="queue-list">
+            {historyRecords.length === 0 && (
+              <div className="queue-empty">No callback records yet</div>
+            )}
+            {historyRecords.map((r) => {
+              const statusColor =
+                r.status === 'completed' ? 'var(--accent-emerald)' :
+                r.status === 'pending' ? 'var(--accent-amber)' :
+                r.status === 'assigned' ? 'var(--accent-cyan)' :
+                'var(--text-muted)';
+              const statusIcon =
+                r.status === 'completed' ? '✅' :
+                r.status === 'pending' ? '⏳' :
+                r.status === 'assigned' ? '📡' : '❌';
+              const when = r.created_at
+                ? new Date(r.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : '--';
+              return (
+                <div key={r.id} className="queue-item">
+                  <div className="queue-item-info">
+                    <span className="queue-caller-id">{statusIcon} {r.user_email}</span>
+                    <span className="queue-meta">
+                      {r.department} · {when} · {r.attempts} attempt{r.attempts !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: statusColor, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {r.status}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
