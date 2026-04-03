@@ -249,7 +249,8 @@ export function AgentDashboard() {
       console.error('Offline error:', err);
     }
     setPhase('login');
-    localStorage.removeItem('agent_identity');
+    // NOTE: intentionally NOT clearing agent_identity from localStorage
+    // so the same agent reconnects with the same identity on next login
     setAgentIdentity('');
     setSeqNumber(0);
     setQueueCallers([]);
