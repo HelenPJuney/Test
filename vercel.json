@@ -23,6 +23,10 @@
     {
       "source": "/cc/:path*",
       "destination": "https://bairnly-unvamped-billye.ngrok-free.dev/cc/:path*"
+    },
+    {
+      "source": "/ws/:path*",
+      "destination": "https://bairnly-unvamped-billye.ngrok-free.dev/ws/:path*"
     }
   ]
 }
