@@ -63,7 +63,7 @@ function ActiveCallView({ callInfo, onEndCall }) {
    OutboundPopup — 10-second countdown popup for outbound callbacks
    ═══════════════════════════════════════════════════════════════════════════════ */
 function OutboundPopup({ outbound, onAccept, onDecline }) {
-  const [countdown, setCountdown] = useState(30);
+  const [countdown, setCountdown] = useState(outbound.countdown || 14);
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [reason, setReason] = useState('');
   const [snoozeMinutes, setSnoozeMinutes] = useState(10);
