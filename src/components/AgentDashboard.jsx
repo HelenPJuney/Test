@@ -5,7 +5,8 @@ import {
   useRoomContext,
 } from '@livekit/components-react';
 
-const API = '';
+const API = import.meta.env.VITE_BACKEND_URL || '';
+const WS_URL = import.meta.env.VITE_BACKEND_WS || '';
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    Department options
@@ -62,7 +63,7 @@ function ActiveCallView({ callInfo, onEndCall }) {
    OutboundPopup — 10-second countdown popup for outbound callbacks
    ═══════════════════════════════════════════════════════════════════════════════ */
 function OutboundPopup({ outbound, onAccept, onDecline }) {
-  const [countdown, setCountdown] = useState(10);
+  const [countdown, setCountdown] = useState(30);
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [reason, setReason] = useState('');
   const [snoozeMinutes, setSnoozeMinutes] = useState(10);
@@ -177,6 +178,9 @@ export function AgentDashboard() {
   const [agentIdentity, setAgentIdentity] = useState('');
   const [seqNumber, setSeqNumber] = useState(0);
 
+  const [wsStatus, setWsStatus] = useState('connecting');
+  const [backendOverride, setBackendOverride] = useState(localStorage.getItem('agent_backend_url') || '');
+
   // Online dashboard state
   const [queueCallers, setQueueCallers] = useState([]);
   const [deptAgents, setDeptAgents] = useState([]);
@@ -192,17 +196,29 @@ export function AgentDashboard() {
   const pollTimerRef = useRef(null);
   const agentPollTimerRef = useRef(null);
 
+  const effectiveAPI = backendOverride || API;
+  const effectiveWS = effectiveAPI ? (effectiveAPI.replace(/^http/, 'ws') + '/ws/events') : WS_URL;
+
   // ── Login ────────────────────────────────────────────────────────────────
   const handleLogin = useCallback(async () => {
     if (!agentName.trim()) return;
-    const identity = `agent-${agentName.trim().toLowerCase().replace(/\s+/g, '-')}-${Math.random().toString(36).substring(2, 8)}`;
+    let identity = localStorage.getItem('agent_identity');
+    if (!identity) {
+      identity = `agent-${agentName.trim().toLowerCase().replace(/\s+/g, '-')}-${Math.random().toString(36).substring(2, 8)}`;
+      localStorage.setItem('agent_identity', identity);
+    }
     setAgentIdentity(identity);
 
+    if (backendOverride) {
+      localStorage.setItem('agent_backend_url', backendOverride);
+    }
+    const targetIdentity = identity || agentIdentity;
+
     try {
-      const res = await fetch(`${API}/cc/agent/online`, {
+      const res = await fetch(`${effectiveAPI}/cc/agent/online`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
-        body: JSON.stringify({ agent_identity: identity, agent_name: agentName.trim(), department }),
+        body: JSON.stringify({ agent_identity: targetIdentity, agent_name: agentName.trim(), department }),
       });
       if (!res.ok) throw new Error(`Login failed: ${res.status}`);
       const data = await res.json();
@@ -216,7 +232,7 @@ export function AgentDashboard() {
   // ── Go Offline ───────────────────────────────────────────────────────────
   const handleGoOffline = useCallback(async () => {
     try {
-      await fetch(`${API}/cc/agent/offline`, {
+      await fetch(`${effectiveAPI}/cc/agent/offline`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
         body: JSON.stringify({ agent_identity: agentIdentity }),
@@ -225,6 +241,7 @@ export function AgentDashboard() {
       console.error('Offline error:', err);
     }
     setPhase('login');
+    localStorage.removeItem('agent_identity');
     setAgentIdentity('');
     setSeqNumber(0);
     setQueueCallers([]);
@@ -239,7 +256,7 @@ export function AgentDashboard() {
 
     const pollQueue = async () => {
       try {
-        const res = await fetch(`${API}/cc/queue?department=${encodeURIComponent(department)}`, {
+        const res = await fetch(`${effectiveAPI}/cc/queue?department=${encodeURIComponent(department)}`, {
           headers: { 'ngrok-skip-browser-warning': '1' },
         });
         if (res.ok) {
@@ -251,7 +268,7 @@ export function AgentDashboard() {
 
     const pollAgents = async () => {
       try {
-        const res = await fetch(`${API}/cc/agent/department/${encodeURIComponent(department)}`, {
+        const res = await fetch(`${effectiveAPI}/cc/agent/department/${encodeURIComponent(department)}`, {
           headers: { 'ngrok-skip-browser-warning': '1' },
         });
         if (res.ok) {
@@ -287,8 +304,24 @@ export function AgentDashboard() {
 
     let ws;
     const connectWs = () => {
-      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${proto}//${window.location.host}/ws/events`);
+      let targetWs;
+      if (effectiveWS) {
+        targetWs = effectiveWS;
+      } else {
+        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host.includes('vercel.app') ? 'localhost:8000' : window.location.host;
+        targetWs = `${proto}//${host}/ws/events`;
+      }
+      
+      console.log("Connecting to WebSocket:", targetWs);
+      ws = new WebSocket(targetWs);
+
+      ws.onopen = () => setWsStatus('connected');
+      ws.onclose = () => {
+        setWsStatus('reconnecting');
+        setTimeout(() => (phase === 'online' || phase === 'in-call') && connectWs(), 3000);
+      };
+      ws.onerror = () => setWsStatus('error');
 
       ws.onmessage = (event) => {
         try {
@@ -373,7 +406,7 @@ export function AgentDashboard() {
   // ── Accept outbound ──────────────────────────────────────────────────────
   const handleAcceptOutbound = useCallback(async (ob) => {
     try {
-      const res = await fetch(`${API}/cc/outbound/accept`, {
+      const res = await fetch(`${effectiveAPI}/cc/outbound/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
         body: JSON.stringify({ outbound_id: ob.outbound_id, agent_identity: agentIdentity }),
@@ -445,6 +478,20 @@ export function AgentDashboard() {
           Sign in to start receiving calls
         </p>
 
+        <div className="form-group">
+          <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', display: 'block', marginBottom: '0.3rem' }}>
+            Backend URL (Local or Ngrok)
+          </label>
+          <input
+            type="text"
+            className="agent-name-input"
+            placeholder="http://localhost:8000"
+            value={backendOverride}
+            onChange={(e) => setBackendOverride(e.target.value)}
+            style={{ marginBottom: '1rem' }}
+          />
+        </div>
+
         <input
           type="text"
           className="agent-name-input"
@@ -493,9 +540,9 @@ export function AgentDashboard() {
           </span>
         </h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span className={`agent-status-badge ${phase === 'in-call' ? 'badge-busy' : 'badge-online'}`}>
-            <span className="status-dot" style={phase === 'in-call' ? { background: 'var(--accent-amber)' } : {}} />
-            {phase === 'in-call' ? 'Busy' : 'Online'}
+          <span className={`agent-status-badge ${phase === 'in-call' ? 'badge-busy' : 'badge-online'}`} title={`WS: ${wsStatus}`}>
+            <span className={`status-dot ${wsStatus}`} style={phase === 'in-call' ? { background: 'var(--accent-amber)' } : {}} />
+            {phase === 'in-call' ? 'Busy' : (wsStatus === 'connected' ? 'Online' : 'Reconnecting...')}
           </span>
           <button className="btn btn-ghost" onClick={handleGoOffline} id="agent-go-offline-btn">
             Go Offline
