@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
-import { CallerView } from './components/CallerView';
-import { ReceiverView } from './components/ReceiverView';
+import { UserDashboard } from './components/UserDashboard';
+import { AgentDashboard } from './components/AgentDashboard';
+import { CallerView as AiAssistView } from './components/CallerView';
 
 /**
- * App — Root component with nav tabs for Caller / Agent views.
- * Completely redesigned: dark glassmorphism premium UI.
+ * App — Root component with nav tabs for:
+ *   1. Call In (UserDashboard) — email + department → queue
+ *   2. Agent Panel (AgentDashboard) — multi-agent ops dashboard
+ *   3. AI Assistant (CallerView) — legacy IVR flow
+ *
+ * Premium dark glassmorphism UI.
  */
 function App() {
   const [tab, setTab] = useState('caller');
@@ -27,24 +32,32 @@ function App() {
             Call In
           </button>
           <button
-            id="tab-receiver"
-            className={`nav-tab ${tab === 'receiver' ? 'active' : ''}`}
-            onClick={() => setTab('receiver')}
+            id="tab-agent"
+            className={`nav-tab ${tab === 'agent' ? 'active' : ''}`}
+            onClick={() => setTab('agent')}
           >
             Agent Panel
+          </button>
+          <button
+            id="tab-ai-assist"
+            className={`nav-tab ${tab === 'ai-assist' ? 'active' : ''}`}
+            onClick={() => setTab('ai-assist')}
+          >
+            AI Assistant
           </button>
         </div>
 
         <div className="nav-status">
-          <span className="status-dot"></span>
+          <span className="status-dot" />
           System Online
         </div>
       </nav>
 
       {/* ── Main Content ─────────────────────────────────────── */}
       <main className="main-content">
-        {tab === 'caller' && <CallerView />}
-        {tab === 'receiver' && <ReceiverView />}
+        {tab === 'caller' && <UserDashboard />}
+        {tab === 'agent' && <AgentDashboard />}
+        {tab === 'ai-assist' && <AiAssistView />}
       </main>
     </div>
   );

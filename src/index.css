@@ -900,3 +900,318 @@ body::before {
   background: rgba(251, 113, 133, 0.25) !important;
   box-shadow: var(--glow-rose) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   User Dashboard — Email Entry + Department Cards
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.user-dashboard {
+  max-width: 800px;
+  width: 100%;
+}
+
+.email-entry {
+  text-align: center;
+  max-width: 450px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.email-entry h2 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.email-entry .text-gradient {
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.email-input {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  background: rgba(15, 20, 35, 0.6);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 1rem;
+  transition: var(--transition);
+  outline: none;
+  margin-bottom: 1.5rem;
+}
+
+.email-input:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
+}
+
+.email-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── Department Cards Grid ────────────────────────────────────────────────── */
+.dept-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+  margin-top: 2rem;
+}
+
+@media (max-width: 640px) {
+  .dept-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dept-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+  text-align: center;
+  cursor: pointer;
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.dept-card:hover {
+  border-color: var(--border-active);
+  box-shadow: var(--glow-cyan);
+  transform: translateY(-4px);
+}
+
+.dept-card-icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.dept-card-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.dept-card-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 1.25rem;
+  line-height: 1.5;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Agent Dashboard — Enhanced Layout
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.agent-login {
+  text-align: center;
+  max-width: 420px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.agent-login h2 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.agent-name-input {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  background: rgba(15, 20, 35, 0.6);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.95rem;
+  transition: var(--transition);
+  outline: none;
+  margin-bottom: 1rem;
+}
+
+.agent-name-input:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
+}
+
+.agent-name-input::placeholder { color: var(--text-muted); }
+
+/* Agent sequence badge */
+.agent-seq-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 100px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: rgba(129, 140, 248, 0.12);
+  color: var(--accent-indigo);
+  border: 1px solid rgba(129, 140, 248, 0.25);
+}
+
+/* Agent list in department */
+.agent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.agent-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 1rem;
+  background: rgba(15, 20, 35, 0.4);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+}
+
+.agent-list-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.agent-list-status {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ── Outbound Callback Popup ──────────────────────────────────────────────── */
+.outbound-popup {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.08), rgba(251, 113, 133, 0.08));
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  animation: popupSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.outbound-popup::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.05), transparent, rgba(251, 113, 133, 0.05));
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+.outbound-countdown {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent-amber);
+  font-variant-numeric: tabular-nums;
+}
+
+.outbound-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent-amber);
+  margin-bottom: 0.75rem;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── Snooze Timer Widget ──────────────────────────────────────────────────── */
+.snooze-widget {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1.2rem;
+  background: rgba(251, 191, 36, 0.06);
+  border: 1px solid rgba(251, 191, 36, 0.15);
+  border-radius: var(--radius-md);
+  margin-bottom: 1rem;
+}
+
+.snooze-timer {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--accent-amber);
+  font-variant-numeric: tabular-nums;
+}
+
+.snooze-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ── Decline Form (within outbound popup) ─────────────────────────────────── */
+.decline-form {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+}
+
+.decline-form label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.decline-select {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  background: rgba(15, 20, 35, 0.6);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.85rem;
+  outline: none;
+  margin-bottom: 0.75rem;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.decline-select:focus {
+  border-color: var(--accent-amber);
+}
+
+/* ── Offline / Rejected Call Screen ───────────────────────────────────────── */
+.offline-screen {
+  text-align: center;
+  max-width: 500px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.offline-icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+  opacity: 0.7;
+}
+
+.offline-screen h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--accent-amber);
+  margin-bottom: 0.75rem;
+}
+
+.offline-screen p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
