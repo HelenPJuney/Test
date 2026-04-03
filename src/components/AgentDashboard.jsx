@@ -88,10 +88,13 @@ function OutboundPopup({ outbound, onAccept, onDecline }) {
   const [snoozeMinutes, setSnoozeMinutes] = useState(10);
 
   useEffect(() => {
-    if (countdown <= 0) return;
+    if (countdown <= 0) {
+      onDecline(outbound, 'missed_popup', 0); // instantly auto-dismiss without snooze
+      return;
+    }
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
-  }, [countdown]);
+  }, [countdown, outbound, onDecline]);
 
   return (
     <div className="outbound-popup">
