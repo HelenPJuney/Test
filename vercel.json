@@ -19,6 +19,10 @@
     {
       "source": "/routing/:path*",
       "destination": "https://bairnly-unvamped-billye.ngrok-free.dev/routing/:path*"
+    },
+    {
+      "source": "/cc/:path*",
+      "destination": "https://bairnly-unvamped-billye.ngrok-free.dev/cc/:path*"
     }
   ]
 }
