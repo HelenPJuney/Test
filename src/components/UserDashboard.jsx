@@ -67,11 +67,13 @@ function InQueueView({ sessionData, onEnd, onConnected }) {
   const agentConnected = sessionData.department === 'Callback'
     ? remoteParticipants.length > 0
     : remoteParticipants.some((p) => p.identity && p.identity.startsWith('agent-'));
+  const hadRemoteRef = useRef(false);
   const activeAudioRef = useRef(null);
 
   // Detect agent connection
   useEffect(() => {
     if (agentConnected) {
+      hadRemoteRef.current = true;
       if (activeAudioRef.current) {
         activeAudioRef.current.pause();
         activeAudioRef.current.currentTime = 0;
@@ -80,6 +82,13 @@ function InQueueView({ sessionData, onEnd, onConnected }) {
       onConnected();
     }
   }, [agentConnected, onConnected]);
+
+  // If the agent leaves after being connected, end the call locally.
+  useEffect(() => {
+    if (remoteParticipants.length > 0) return;
+    if (!hadRemoteRef.current) return;
+    onEnd();
+  }, [remoteParticipants.length, onEnd]);
 
   // Listen for TTS data messages
   useEffect(() => {

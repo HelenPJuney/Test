@@ -28,6 +28,7 @@ function ActiveCallView({ callInfo, onEndCall }) {
   const remoteParticipants = useRemoteParticipants();
   const isOutbound = callInfo.sessionId && callInfo.sessionId.startsWith('outbound-');
   const remoteCount = remoteParticipants.length;
+  const hadRemoteRef = useRef(false);
 
   const handleEnd = useCallback((noAnswer = false) => {
     room.disconnect();
@@ -35,10 +36,24 @@ function ActiveCallView({ callInfo, onEndCall }) {
   }, [room, onEndCall]);
 
   useEffect(() => {
+    if (remoteCount > 0) {
+      hadRemoteRef.current = true;
+    }
+  }, [remoteCount]);
+
+  // Outbound: if caller never joins, mark no_answer after timeout.
+  useEffect(() => {
     if (!isOutbound || remoteCount > 0) return undefined;
     const timeout = setTimeout(() => handleEnd(true), OUTBOUND_WAIT_SECONDS * 1000);
     return () => clearTimeout(timeout);
   }, [isOutbound, remoteCount, handleEnd]);
+
+  // Any call: if remote was connected and then leaves, end for both sides.
+  useEffect(() => {
+    if (remoteCount > 0) return;
+    if (!hadRemoteRef.current) return;
+    handleEnd(false);
+  }, [remoteCount, handleEnd]);
 
   return (
     <div className="incoming-call-popup" style={{ borderColor: 'rgba(52, 211, 153, 0.4)', background: 'linear-gradient(135deg, rgba(52, 211, 153, 0.08), rgba(34, 211, 238, 0.08))' }}>
