@@ -338,9 +338,13 @@ export function AgentDashboard() {
       if (effectiveWS) {
         targetWs = effectiveWS;
       } else {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (!isLocalhost) {
+          setWsStatus('error');
+          return;
+        }
         const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.host.includes('vercel.app') ? 'localhost:8000' : window.location.host;
-        targetWs = `${proto}//${host}/ws/events`;
+        targetWs = `${proto}//${window.location.host}/ws/events`;
       }
 
       console.log('[WS] Connecting to:', targetWs, '| identity:', agentIdentityRef.current);

@@ -7,10 +7,12 @@ import {
 } from '@livekit/components-react';
 import { RoomEvent } from 'livekit-client';
 
-const API = '';
-const WS_URL = import.meta.env.VITE_BACKEND_WS || '';
+const API = import.meta.env.VITE_BACKEND_URL || '';
+const WS_URL = import.meta.env.VITE_BACKEND_WS || (API ? `${API.replace(/^http/, 'ws')}/ws/events` : '');
+const IS_LOCALHOST = typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 const EFFECTIVE_WS = WS_URL || (
-  typeof window !== 'undefined'
+  typeof window !== 'undefined' && IS_LOCALHOST
     ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/events`
     : ''
 );
@@ -214,7 +216,7 @@ export function UserDashboard() {
         ws.close();
       }
     };
-  }, [email]);
+  }, [email, EFFECTIVE_WS]);
 
   // ── Accept Callback ──────────────────────────────────────────────────────
   const handleAcceptCallback = useCallback(async () => {
