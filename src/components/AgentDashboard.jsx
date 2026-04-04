@@ -23,7 +23,6 @@ const DEPT_OPTIONS = [
    ═══════════════════════════════════════════════════════════════════════════════ */
 function ActiveCallView({ callInfo, onEndCall }) {
   const room = useRoomContext();
-  const [ringing, setRinging] = useState(14);
   const isOutbound = callInfo.sessionId && callInfo.sessionId.startsWith('outbound-');
   const participantCount = room.participants ? Array.from(room.participants.values()).length : 0;
 
@@ -32,16 +31,12 @@ function ActiveCallView({ callInfo, onEndCall }) {
     onEndCall(noAnswer);
   }, [room, onEndCall]);
 
-  useEffect(() => {
-    if (!isOutbound) return;
-    if (participantCount > 0) return; // someone picked up!
-    if (ringing <= 0) {
-      handleEnd(true); // 14s elapsed, no one answered
-      return;
-    }
-    const t = setTimeout(() => setRinging(r => r - 1), 1000);
-    return () => clearTimeout(t);
-  }, [isOutbound, participantCount, ringing, handleEnd]);
+  // NOTE: Removed auto-timeout logic for outbound calls after agent accepts
+  // The 14-second countdown should only happen in OutboundPopup BEFORE acceptance
+  // Once accepted, the call should remain open until:
+  // 1) The external caller joins (participantCount > 0), or
+  // 2) The agent manually clicks "End Call"
+  // This fixes the "no answer" email being sent 14s after acceptance
 
   return (
     <div className="incoming-call-popup" style={{ borderColor: 'rgba(52, 211, 153, 0.4)', background: 'linear-gradient(135deg, rgba(52, 211, 153, 0.08), rgba(34, 211, 238, 0.08))' }}>
@@ -67,7 +62,7 @@ function ActiveCallView({ callInfo, onEndCall }) {
       <div className="incoming-actions" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
         {isOutbound && participantCount === 0 && (
           <div style={{ fontSize: '0.85rem', color: 'var(--accent-amber)', textAlign: 'center', fontWeight: 'bold' }}>
-            Ringing... {ringing}s
+            Waiting for caller to join...
           </div>
         )}
         <button className="btn btn-danger" onClick={() => handleEnd(false)}>
