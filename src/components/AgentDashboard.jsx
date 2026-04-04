@@ -31,12 +31,11 @@ function ActiveCallView({ callInfo, onEndCall }) {
     onEndCall(noAnswer);
   }, [room, onEndCall]);
 
-  // NOTE: Removed auto-timeout logic for outbound calls after agent accepts
-  // The 14-second countdown should only happen in OutboundPopup BEFORE acceptance
-  // Once accepted, the call should remain open until:
-  // 1) The external caller joins (participantCount > 0), or
-  // 2) The agent manually clicks "End Call"
-  // This fixes the "no answer" email being sent 14s after acceptance
+  useEffect(() => {
+    if (!isOutbound || participantCount > 0) return undefined;
+    const timeout = setTimeout(() => handleEnd(true), 14000);
+    return () => clearTimeout(timeout);
+  }, [isOutbound, participantCount, handleEnd]);
 
   return (
     <div className="incoming-call-popup" style={{ borderColor: 'rgba(52, 211, 153, 0.4)', background: 'linear-gradient(135deg, rgba(52, 211, 153, 0.08), rgba(34, 211, 238, 0.08))' }}>
@@ -65,7 +64,7 @@ function ActiveCallView({ callInfo, onEndCall }) {
             Waiting for caller to join...
           </div>
         )}
-        <button className="btn btn-danger" onClick={() => handleEnd(false)}>
+        <button className="btn btn-danger" onClick={() => handleEnd(isOutbound && participantCount === 0)}>
           ✕ End Call
         </button>
       </div>
@@ -391,7 +390,7 @@ export function AgentDashboard() {
   const handleAcceptCall = useCallback(async (caller) => {
     try {
       const res = await fetch(
-        `${API}/cc/agent/accept/${caller.session_id}?agent_identity=${encodeURIComponent(agentIdentity)}&agent_name=${encodeURIComponent(agentName)}`,
+        `${effectiveAPI}/cc/agent/accept/${caller.session_id}?agent_identity=${encodeURIComponent(agentIdentity)}&agent_name=${encodeURIComponent(agentName)}`,
         {
           method: 'POST',
           headers: { 'ngrok-skip-browser-warning': '1' },
@@ -413,23 +412,29 @@ export function AgentDashboard() {
     } catch (err) {
       console.error('Accept call error:', err);
     }
-  }, [agentIdentity, agentName, department]);
+  }, [agentIdentity, agentName, department, effectiveAPI]);
 
   // ── End call ─────────────────────────────────────────────────────────────
   const handleEndCall = useCallback(async (isNoAnswer = false) => {
     try {
-      if (isNoAnswer && callInfo.sessionId?.startsWith('outbound-')) {
-        // Send to no-answer API so it triggers the "missed you" email
+      if (callInfo.sessionId?.startsWith('outbound-')) {
         const outboundId = parseInt(callInfo.sessionId.replace('outbound-', ''), 10);
-        await fetch(`${effectiveAPI}/cc/outbound/no-answer`, {
+        const endpoint = isNoAnswer ? 'no-answer' : 'complete';
+        const payload = isNoAnswer
+          ? {
+              outbound_id: outboundId,
+              user_email: callInfo.userEmail,
+              department: callInfo.department,
+              agent_identity: agentIdentity,
+            }
+          : {
+              outbound_id: outboundId,
+              agent_identity: agentIdentity,
+            };
+        await fetch(`${effectiveAPI}/cc/outbound/${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
-          body: JSON.stringify({
-            outbound_id: outboundId,
-            user_email: callInfo.userEmail,
-            department: callInfo.department,
-            agent_identity: agentIdentity,
-          }),
+          body: JSON.stringify(payload),
         });
       } else {
         await fetch(`${effectiveAPI}/cc/agent/end-call`, {
@@ -448,7 +453,7 @@ export function AgentDashboard() {
     setCallUrl('');
     setCallInfo({});
     setPhase('online');
-  }, [agentIdentity, callInfo.sessionId]);
+  }, [agentIdentity, callInfo.sessionId, callInfo.userEmail, callInfo.department, effectiveAPI]);
 
   // ── Accept outbound ──────────────────────────────────────────────────────
   const handleAcceptOutbound = useCallback(async (ob) => {
@@ -480,7 +485,7 @@ export function AgentDashboard() {
   // ── Decline outbound ─────────────────────────────────────────────────────
   const handleDeclineOutbound = useCallback(async (ob, reason, snoozeMinutes) => {
     try {
-      const res = await fetch(`${API}/cc/outbound/decline`, {
+      const res = await fetch(`${effectiveAPI}/cc/outbound/decline`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
         body: JSON.stringify({
@@ -498,7 +503,7 @@ export function AgentDashboard() {
       console.error('Decline error:', err);
     }
     setOutboundPopup(null);
-  }, [agentIdentity]);
+  }, [agentIdentity, effectiveAPI]);
 
   // ── History polling ──────────────────────────────────────────────────────
   useEffect(() => {
