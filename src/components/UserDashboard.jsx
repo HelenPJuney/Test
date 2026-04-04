@@ -378,7 +378,6 @@ export function UserDashboard() {
             <div
               key={dept.name}
               className="dept-card glass-card"
-              onClick={() => handleCallDepartment(dept.name)}
               id={`dept-${dept.name.replace(/\s+/g, '-').toLowerCase()}`}
             >
               <div className="dept-card-icon">{dept.icon}</div>
@@ -387,8 +386,9 @@ export function UserDashboard() {
               <button
                 className="btn btn-primary"
                 style={{ width: '100%', justifyContent: 'center', marginTop: '0.25rem' }}
+                onClick={() => handleCallDepartment(dept.name)}
               >
-                📞 Call Now
+                📞 Tap to Call
               </button>
             </div>
           ))}
@@ -465,3 +465,4 @@ export function UserDashboard() {
 
   return null;
 }
+
