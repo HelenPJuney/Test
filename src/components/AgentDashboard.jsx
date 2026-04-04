@@ -7,6 +7,7 @@ import {
 
 const API = import.meta.env.VITE_BACKEND_URL || '';
 const WS_URL = import.meta.env.VITE_BACKEND_WS || '';
+const OUTBOUND_WAIT_SECONDS = 25;
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    Department options
@@ -33,7 +34,7 @@ function ActiveCallView({ callInfo, onEndCall }) {
 
   useEffect(() => {
     if (!isOutbound || participantCount > 0) return undefined;
-    const timeout = setTimeout(() => handleEnd(true), 25000);
+    const timeout = setTimeout(() => handleEnd(true), OUTBOUND_WAIT_SECONDS * 1000);
     return () => clearTimeout(timeout);
   }, [isOutbound, participantCount, handleEnd]);
 
@@ -76,7 +77,7 @@ function ActiveCallView({ callInfo, onEndCall }) {
    OutboundPopup — countdown popup for outbound callbacks
    ═══════════════════════════════════════════════════════════════════════════════ */
 function OutboundPopup({ outbound, onAccept, onDecline }) {
-  const [countdown, setCountdown] = useState(outbound.countdown || 25);
+  const [countdown, setCountdown] = useState(outbound.countdown || OUTBOUND_WAIT_SECONDS);
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [reason, setReason] = useState('');
   const [snoozeMinutes, setSnoozeMinutes] = useState(10);
@@ -216,6 +217,21 @@ export function AgentDashboard() {
   // UI state
   const [activeTab, setActiveTab] = useState('queue'); // 'queue' | 'agents' | 'history'
   const [historyRecords, setHistoryRecords] = useState([]);
+  const maybeShowOutboundFromHistory = useCallback((records) => {
+    if (phase !== 'online' || outboundPopup || !agentIdentity) return;
+    const pendingAssigned = (records || []).find(
+      (r) => r.status === 'assigned' && r.assigned_agent === agentIdentity
+    );
+    if (!pendingAssigned) return;
+    setOutboundPopup({
+      outbound_id: pendingAssigned.id,
+      user_email: pendingAssigned.user_email,
+      department: pendingAssigned.department,
+      countdown: OUTBOUND_WAIT_SECONDS,
+      target_agent: pendingAssigned.assigned_agent,
+      attempt_number: pendingAssigned.attempts || 1,
+    });
+  }, [phase, outboundPopup, agentIdentity]);
 
   const wsRef = useRef(null);
   const pollTimerRef = useRef(null);
@@ -520,14 +536,16 @@ export function AgentDashboard() {
         );
         if (res.ok) {
           const data = await res.json();
-          setHistoryRecords(data.history || []);
+          const records = data.history || [];
+          setHistoryRecords(records);
+          maybeShowOutboundFromHistory(records);
         }
       } catch (e) { /* ignore */ }
     };
     fetchHistory();
     const iv = setInterval(fetchHistory, 10000); // refresh every 10s
     return () => clearInterval(iv);
-  }, [phase, department, effectiveAPI]);
+  }, [phase, department, effectiveAPI, maybeShowOutboundFromHistory]);
 
   // ── Resume outbound ──────────────────────────────────────────────────────
   const handleResume = useCallback(async () => {
