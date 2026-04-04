@@ -8,6 +8,7 @@ import {
 import { RoomEvent } from 'livekit-client';
 
 const API = '';
+const WS_URL = import.meta.env.VITE_BACKEND_WS || '';
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    Audio Visualizer — reused from CallerView pattern
@@ -180,15 +181,13 @@ export function UserDashboard() {
 
   // ── Listen for Callback via WebSocket ────────────────────────────────────
   useEffect(() => {
-    if (!email || !email.includes('@')) return;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = API ? `${API.replace(/^http/, 'ws')}/ws/events` : `${protocol}//${window.location.host}/ws/events`;
+    if (!email || !email.includes('@') || !WS_URL) return;
     
     let ws = null;
     let reconnectTimer = null;
 
     const connectWs = () => {
-      ws = new WebSocket(wsUrl);
+      ws = new WebSocket(WS_URL);
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
