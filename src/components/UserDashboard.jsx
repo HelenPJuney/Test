@@ -3,7 +3,7 @@ import {
   LiveKitRoom,
   RoomAudioRenderer,
   useRoomContext,
-  useParticipants,
+  useRemoteParticipants,
 } from '@livekit/components-react';
 import { RoomEvent } from 'livekit-client';
 
@@ -63,10 +63,10 @@ const DEPARTMENTS = [
    ═══════════════════════════════════════════════════════════════════════════════ */
 function InQueueView({ sessionData, onEnd, onConnected }) {
   const room = useRoomContext();
-  const participants = useParticipants();
+  const remoteParticipants = useRemoteParticipants();
   const agentConnected = sessionData.department === 'Callback'
-    ? participants.length > 0
-    : participants.some((p) => p.identity && p.identity.startsWith('agent-'));
+    ? remoteParticipants.length > 0
+    : remoteParticipants.some((p) => p.identity && p.identity.startsWith('agent-'));
   const activeAudioRef = useRef(null);
 
   // Detect agent connection

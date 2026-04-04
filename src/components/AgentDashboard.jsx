@@ -3,7 +3,7 @@ import {
   LiveKitRoom,
   RoomAudioRenderer,
   useRoomContext,
-  useParticipants,
+  useRemoteParticipants,
 } from '@livekit/components-react';
 
 const API = import.meta.env.VITE_BACKEND_URL || '';
@@ -25,9 +25,9 @@ const DEPT_OPTIONS = [
    ═══════════════════════════════════════════════════════════════════════════════ */
 function ActiveCallView({ callInfo, onEndCall }) {
   const room = useRoomContext();
-  const participants = useParticipants();
+  const remoteParticipants = useRemoteParticipants();
   const isOutbound = callInfo.sessionId && callInfo.sessionId.startsWith('outbound-');
-  const participantCount = participants.length;
+  const remoteCount = remoteParticipants.length;
 
   const handleEnd = useCallback((noAnswer = false) => {
     room.disconnect();
@@ -35,10 +35,10 @@ function ActiveCallView({ callInfo, onEndCall }) {
   }, [room, onEndCall]);
 
   useEffect(() => {
-    if (!isOutbound || participantCount > 0) return undefined;
+    if (!isOutbound || remoteCount > 0) return undefined;
     const timeout = setTimeout(() => handleEnd(true), OUTBOUND_WAIT_SECONDS * 1000);
     return () => clearTimeout(timeout);
-  }, [isOutbound, participantCount, handleEnd]);
+  }, [isOutbound, remoteCount, handleEnd]);
 
   return (
     <div className="incoming-call-popup" style={{ borderColor: 'rgba(52, 211, 153, 0.4)', background: 'linear-gradient(135deg, rgba(52, 211, 153, 0.08), rgba(34, 211, 238, 0.08))' }}>
@@ -62,12 +62,12 @@ function ActiveCallView({ callInfo, onEndCall }) {
         </div>
       </div>
       <div className="incoming-actions" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        {isOutbound && participantCount === 0 && (
+        {isOutbound && remoteCount === 0 && (
           <div style={{ fontSize: '0.85rem', color: 'var(--accent-amber)', textAlign: 'center', fontWeight: 'bold' }}>
             Waiting for caller to join...
           </div>
         )}
-        <button className="btn btn-danger" onClick={() => handleEnd(isOutbound && participantCount === 0)}>
+        <button className="btn btn-danger" onClick={() => handleEnd(isOutbound && remoteCount === 0)}>
           ✕ End Call
         </button>
       </div>
