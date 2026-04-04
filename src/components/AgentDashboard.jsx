@@ -33,7 +33,7 @@ function ActiveCallView({ callInfo, onEndCall }) {
 
   useEffect(() => {
     if (!isOutbound || participantCount > 0) return undefined;
-    const timeout = setTimeout(() => handleEnd(true), 14000);
+    const timeout = setTimeout(() => handleEnd(true), 25000);
     return () => clearTimeout(timeout);
   }, [isOutbound, participantCount, handleEnd]);
 
@@ -73,10 +73,10 @@ function ActiveCallView({ callInfo, onEndCall }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   OutboundPopup — 10-second countdown popup for outbound callbacks
+   OutboundPopup — countdown popup for outbound callbacks
    ═══════════════════════════════════════════════════════════════════════════════ */
 function OutboundPopup({ outbound, onAccept, onDecline }) {
-  const [countdown, setCountdown] = useState(outbound.countdown || 14);
+  const [countdown, setCountdown] = useState(outbound.countdown || 25);
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [reason, setReason] = useState('');
   const [snoozeMinutes, setSnoozeMinutes] = useState(10);

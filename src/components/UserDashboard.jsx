@@ -239,6 +239,23 @@ export function UserDashboard() {
     }
   }, [email, outboundCallback]);
 
+  const callbackPopup = outboundCallback && (
+    <div className="outbound-popup" style={{ bottom: '2rem', right: '2rem' }}>
+      <div className="outbound-label">📞 AGENT IS CALLING YOU BACK!</div>
+      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem', position: 'relative' }}>
+        An agent is now ready to speak with you.
+      </p>
+      <div className="incoming-actions" style={{ position: 'relative' }}>
+        <button className="btn btn-success" onClick={handleAcceptCallback} style={{ width: '100%', justifyContent: 'center' }}>
+          ✓ Join Call
+        </button>
+        <button className="btn btn-danger" onClick={() => setOutboundCallback(null)} style={{ marginTop: '0.5rem', width: '100%', justifyContent: 'center' }}>
+          ✕ Ignore
+        </button>
+      </div>
+    </div>
+  );
+
   // ── Email submit ─────────────────────────────────────────────────────────
   const handleEmailSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -335,6 +352,7 @@ export function UserDashboard() {
             </button>
           </form>
         </div>
+        {callbackPopup}
       </div>
     );
   }
@@ -380,23 +398,7 @@ export function UserDashboard() {
           </button>
         </div>
 
-        {/* ── Callback Popup ── */}
-        {outboundCallback && (
-          <div className="outbound-popup" style={{ bottom: '2rem', right: '2rem' }}>
-            <div className="outbound-label">📞 AGENT IS CALLING YOU BACK!</div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem', position: 'relative' }}>
-              An agent is now ready to speak with you.
-            </p>
-            <div className="incoming-actions" style={{ position: 'relative' }}>
-              <button className="btn btn-success" onClick={handleAcceptCallback} style={{ width: '100%', justifyContent: 'center' }}>
-                ✓ Join Call
-              </button>
-              <button className="btn btn-danger" onClick={() => setOutboundCallback(null)} style={{ marginTop: '0.5rem', width: '100%', justifyContent: 'center' }}>
-                ✕ Ignore
-              </button>
-            </div>
-          </div>
-        )}
+        {callbackPopup}
       </div>
     );
   }
@@ -410,6 +412,7 @@ export function UserDashboard() {
           <p className="ivr-status-text">Connecting...</p>
           <p className="ivr-detail-text">Setting up your call, please wait.</p>
         </div>
+        {callbackPopup}
       </div>
     );
   }
@@ -426,6 +429,7 @@ export function UserDashboard() {
             ← Back to Departments
           </button>
         </div>
+        {callbackPopup}
       </div>
     );
   }
@@ -449,6 +453,7 @@ export function UserDashboard() {
             onConnected={() => setPhase('connected')}
           />
         </LiveKitRoom>
+        {callbackPopup}
       </div>
     );
   }
