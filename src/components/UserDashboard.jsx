@@ -176,6 +176,64 @@ export function UserDashboard() {
   const [sessionData, setSessionData] = useState({});
   const [offlineMsg, setOfflineMsg] = useState('');
   const [error, setError] = useState('');
+  const [outboundCallback, setOutboundCallback] = useState(null);
+
+  // ── Listen for Callback via WebSocket ────────────────────────────────────
+  useEffect(() => {
+    if (!email || !email.includes('@')) return;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = API ? `${API.replace(/^http/, 'ws')}/ws/events` : `${protocol}//${window.location.host}/ws/events`;
+    
+    let ws = null;
+    let reconnectTimer = null;
+
+    const connectWs = () => {
+      ws = new WebSocket(wsUrl);
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'caller_pickup' && data.user_email === email) {
+            setOutboundCallback({ room: data.room });
+          }
+        } catch (e) { /* ignore */ }
+      };
+      ws.onclose = () => {
+        reconnectTimer = setTimeout(connectWs, 3000);
+      };
+    };
+
+    connectWs();
+    return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+      }
+    };
+  }, [email]);
+
+  // ── Accept Callback ──────────────────────────────────────────────────────
+  const handleAcceptCallback = useCallback(async () => {
+    if (!outboundCallback) return;
+    try {
+      const res = await fetch(`${API}/cc/outbound/caller-token?room=${encodeURIComponent(outboundCallback.room)}&user_email=${encodeURIComponent(email)}`, {
+        headers: { 'ngrok-skip-browser-warning': '1' }
+      });
+      if (!res.ok) throw new Error('Failed to get callback token');
+      const data = await res.json();
+      
+      setSessionData({
+        token: data.token,
+        url: data.url,
+        room: outboundCallback.room,
+        department: 'Callback'
+      });
+      setOutboundCallback(null);
+      setPhase('in-queue'); // will transition to connected automatically
+    } catch (err) {
+      setError(err.message);
+    }
+  }, [email, outboundCallback]);
 
   // ── Email submit ─────────────────────────────────────────────────────────
   const handleEmailSubmit = useCallback(async (e) => {
@@ -317,6 +375,24 @@ export function UserDashboard() {
             ← Change Email
           </button>
         </div>
+
+        {/* ── Callback Popup ── */}
+        {outboundCallback && (
+          <div className="outbound-popup" style={{ bottom: '2rem', right: '2rem' }}>
+            <div className="outbound-label">📞 AGENT IS CALLING YOU BACK!</div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem', position: 'relative' }}>
+              An agent is now ready to speak with you.
+            </p>
+            <div className="incoming-actions" style={{ position: 'relative' }}>
+              <button className="btn btn-success" onClick={handleAcceptCallback} style={{ width: '100%', justifyContent: 'center' }}>
+                ✓ Join Call
+              </button>
+              <button className="btn btn-danger" onClick={() => setOutboundCallback(null)} style={{ marginTop: '0.5rem', width: '100%', justifyContent: 'center' }}>
+                ✕ Ignore
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
