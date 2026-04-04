@@ -239,6 +239,7 @@ export function AgentDashboard() {
   const pollTimerRef = useRef(null);
   const agentPollTimerRef = useRef(null);
   const endingSessionRef = useRef('');
+  const acceptingOutboundRef = useRef(false);
   const agentIdentityRef = useRef(''); // ← always up-to-date, avoids stale closure in WS handler
 
   // Keep ref in sync with state
@@ -484,6 +485,8 @@ export function AgentDashboard() {
 
   // ── Accept outbound ──────────────────────────────────────────────────────
   const handleAcceptOutbound = useCallback(async (ob) => {
+    if (acceptingOutboundRef.current) return;
+    acceptingOutboundRef.current = true;
     try {
       const res = await fetch(`${effectiveAPI}/cc/outbound/accept`, {
         method: 'POST',
@@ -492,6 +495,10 @@ export function AgentDashboard() {
       });
       if (!res.ok) throw new Error(`Outbound accept failed: ${res.status}`);
       const data = await res.json();
+      if (data.already_handled || !data.token || !data.room) {
+        setOutboundPopup(null);
+        return;
+      }
 
       setCallToken(data.token);
       setCallUrl(data.url);
@@ -507,6 +514,8 @@ export function AgentDashboard() {
       setPhase('in-call');
     } catch (err) {
       console.error('Outbound accept error:', err);
+    } finally {
+      acceptingOutboundRef.current = false;
     }
   }, [agentIdentity, effectiveAPI]);
 

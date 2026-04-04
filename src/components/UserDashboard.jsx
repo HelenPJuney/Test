@@ -64,9 +64,9 @@ const DEPARTMENTS = [
 function InQueueView({ sessionData, onEnd, onConnected }) {
   const room = useRoomContext();
   const participants = useParticipants();
-  const agentConnected = participants.some(
-    (p) => p.identity && p.identity.startsWith('agent-')
-  );
+  const agentConnected = sessionData.department === 'Callback'
+    ? participants.length > 0
+    : participants.some((p) => p.identity && p.identity.startsWith('agent-'));
   const activeAudioRef = useRef(null);
 
   // Detect agent connection
@@ -140,12 +140,18 @@ function InQueueView({ sessionData, onEnd, onConnected }) {
           <p className="ivr-status-text">
             Waiting in {sessionData.department} Queue
           </p>
-          <p className="ivr-detail-text">
-            Position <strong style={{ color: 'var(--accent-indigo)' }}>#{sessionData.queuePosition}</strong> · Estimated wait:{' '}
-            <strong style={{ color: 'var(--accent-cyan)' }}>
-              {Math.ceil(sessionData.waitSeconds / 60)} min
-            </strong>
-          </p>
+          {sessionData.department !== 'Callback' ? (
+            <p className="ivr-detail-text">
+              Position <strong style={{ color: 'var(--accent-indigo)' }}>#{sessionData.queuePosition}</strong> · Estimated wait:{' '}
+              <strong style={{ color: 'var(--accent-cyan)' }}>
+                {Math.ceil(sessionData.waitSeconds / 60)} min
+              </strong>
+            </p>
+          ) : (
+            <p className="ivr-detail-text">
+              Joining your callback room. Agent should connect in a few seconds.
+            </p>
+          )}
           <span
             className="incoming-dept-badge"
             style={{ fontSize: '0.85rem', padding: '0.4rem 1rem', marginBottom: '1.5rem', display: 'inline-block' }}
@@ -237,7 +243,9 @@ export function UserDashboard() {
         token: data.token,
         url: data.url,
         room: outboundCallback.room,
-        department: 'Callback'
+        department: 'Callback',
+        queuePosition: 1,
+        waitSeconds: 0,
       });
       setOutboundCallback(null);
       setPhase('in-queue'); // will transition to connected automatically
