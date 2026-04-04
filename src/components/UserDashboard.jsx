@@ -179,16 +179,17 @@ function InQueueView({ sessionData, onEnd, onConnected }) {
    ═══════════════════════════════════════════════════════════════════════════════ */
 export function UserDashboard() {
   const [phase, setPhase] = useState('email'); // email | departments | calling | in-queue | connected | offline | error
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => localStorage.getItem('cc_user_email') || '');
   const [userId, setUserId] = useState(null);
   const [sessionData, setSessionData] = useState({});
   const [offlineMsg, setOfflineMsg] = useState('');
   const [error, setError] = useState('');
   const [outboundCallback, setOutboundCallback] = useState(null);
+  const normalizedEmail = email.trim().toLowerCase();
 
   // ── Listen for Callback via WebSocket ────────────────────────────────────
   useEffect(() => {
-    if (!email || !email.includes('@') || !EFFECTIVE_WS) return;
+    if (!normalizedEmail || !normalizedEmail.includes('@') || !EFFECTIVE_WS) return;
     
     let ws = null;
     let reconnectTimer = null;
@@ -198,7 +199,8 @@ export function UserDashboard() {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.type === 'caller_pickup' && data.user_email === email) {
+          const eventEmail = (data.user_email || '').trim().toLowerCase();
+          if (data.type === 'caller_pickup' && eventEmail === normalizedEmail) {
             setOutboundCallback({ room: data.room });
           }
         } catch (e) { /* ignore */ }
@@ -216,13 +218,13 @@ export function UserDashboard() {
         ws.close();
       }
     };
-  }, [email, EFFECTIVE_WS]);
+  }, [normalizedEmail, EFFECTIVE_WS]);
 
   // ── Accept Callback ──────────────────────────────────────────────────────
   const handleAcceptCallback = useCallback(async () => {
     if (!outboundCallback) return;
     try {
-      const res = await fetch(`${API}/cc/outbound/caller-token?room=${encodeURIComponent(outboundCallback.room)}&user_email=${encodeURIComponent(email)}`, {
+      const res = await fetch(`${API}/cc/outbound/caller-token?room=${encodeURIComponent(outboundCallback.room)}&user_email=${encodeURIComponent(normalizedEmail)}`, {
         headers: { 'ngrok-skip-browser-warning': '1' }
       });
       if (!res.ok) throw new Error('Failed to get callback token');
@@ -239,7 +241,7 @@ export function UserDashboard() {
     } catch (err) {
       setError(err.message);
     }
-  }, [email, outboundCallback]);
+  }, [normalizedEmail, outboundCallback]);
 
   const callbackPopup = outboundCallback && (
     <div className="outbound-popup" style={{ bottom: '2rem', right: '2rem' }}>
@@ -261,22 +263,23 @@ export function UserDashboard() {
   // ── Email submit ─────────────────────────────────────────────────────────
   const handleEmailSubmit = useCallback(async (e) => {
     e.preventDefault();
-    if (!email.trim() || !email.includes('@')) return;
+    if (!normalizedEmail || !normalizedEmail.includes('@')) return;
     try {
       const res = await fetch(`${API}/cc/auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: normalizedEmail }),
       });
       if (!res.ok) throw new Error(`Auth failed: ${res.status}`);
       const data = await res.json();
       setUserId(data.user_id);
+      localStorage.setItem('cc_user_email', normalizedEmail);
       setPhase('departments');
     } catch (err) {
       setError(err.message);
       setPhase('error');
     }
-  }, [email]);
+  }, [normalizedEmail]);
 
   // ── Department selected ──────────────────────────────────────────────────
   const handleCallDepartment = useCallback(async (deptName) => {
@@ -285,7 +288,7 @@ export function UserDashboard() {
       const res = await fetch(`${API}/cc/call`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
-        body: JSON.stringify({ email: email.trim(), department: deptName }),
+        body: JSON.stringify({ email: normalizedEmail, department: deptName }),
       });
       if (!res.ok) throw new Error(`Call failed: ${res.status}`);
       const data = await res.json();
@@ -312,7 +315,7 @@ export function UserDashboard() {
       setError(err.message);
       setPhase('error');
     }
-  }, [email]);
+  }, [normalizedEmail]);
 
   const resetAll = useCallback(() => {
     setPhase('departments');
@@ -394,7 +397,7 @@ export function UserDashboard() {
         <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
           <button
             className="btn btn-ghost"
-            onClick={() => { setPhase('email'); setEmail(''); setUserId(null); }}
+            onClick={() => { setPhase('email'); setEmail(''); setUserId(null); localStorage.removeItem('cc_user_email'); }}
           >
             ← Change Email
           </button>
