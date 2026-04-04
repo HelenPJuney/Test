@@ -99,13 +99,18 @@ function OutboundPopup({ outbound, onAccept, onDecline }) {
   return (
     <div className="outbound-popup">
       <div className="outbound-countdown">⏱️ {countdown}s</div>
-      <div className="outbound-label">📤 OUTBOUND CALLBACK REQUEST</div>
-      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem', position: 'relative' }}>
-        A caller waited in queue but left. You have an available callback.
+      <div className="outbound-label">📤 OUTBOUND CALLBACK</div>
+      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.75rem', position: 'relative' }}>
+        Customer left queue. Callback available.
       </p>
-      <p style={{ color: 'var(--text-primary)', fontSize: '0.95rem', fontWeight: 500, marginBottom: '1rem', position: 'relative' }}>
-        📧 {outbound.user_email} · {outbound.department}
-      </p>
+      <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '0.75rem', borderRadius: '0.5rem', marginBottom: '1rem', borderLeft: '3px solid var(--accent-cyan)' }}>
+        <p style={{ color: 'var(--text-primary)', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.25rem 0' }}>
+          📧 {outbound.user_email}
+        </p>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0' }}>
+          {outbound.department}
+        </p>
+      </div>
 
       {!showDeclineForm ? (
         <div className="incoming-actions" style={{ position: 'relative' }}>
@@ -683,7 +688,30 @@ export function AgentDashboard() {
         <div className="glass-card-static">
           <div className="queue-dashboard-title">
             <h3>Call Queue — {department}</h3>
-            <span className="queue-count-badge">{queueCallers.length} waiting</span>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <span className="queue-count-badge">{queueCallers.length} waiting</span>
+              <button
+                onClick={() => {
+                  setQueueCallers([]);
+                  setTimeout(async () => {
+                    try {
+                      const res = await fetch(`${effectiveAPI}/cc/queue?department=${encodeURIComponent(department)}`, {
+                        headers: { 'ngrok-skip-browser-warning': '1' },
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        setQueueCallers(data.callers || []);
+                      }
+                    } catch (e) { /* ignore */ }
+                  }, 100);
+                }}
+                className="btn btn-ghost"
+                style={{ fontSize: '0.7rem', padding: '0.3rem 0.6rem', minWidth: '40px' }}
+                title="Refresh queue"
+              >
+                🔄 Refresh
+              </button>
+            </div>
           </div>
           <div className="queue-list">
             {queueCallers.length === 0 && (
