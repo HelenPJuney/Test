@@ -181,6 +181,7 @@ export function UserDashboard() {
   const [phase, setPhase] = useState('email'); // email | departments | calling | in-queue | connected | offline | error
   const [email, setEmail] = useState(() => localStorage.getItem('cc_user_email') || '');
   const [userId, setUserId] = useState(null);
+  const [selectedDepartment, setSelectedDepartment] = useState('');
   const [sessionData, setSessionData] = useState({});
   const [offlineMsg, setOfflineMsg] = useState('');
   const [error, setError] = useState('');
@@ -283,12 +284,14 @@ export function UserDashboard() {
 
   // ── Department selected ──────────────────────────────────────────────────
   const handleCallDepartment = useCallback(async (deptName) => {
+    const deptToCall = deptName || selectedDepartment;
+    if (!deptToCall) return;
     setPhase('calling');
     try {
       const res = await fetch(`${API}/cc/call`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
-        body: JSON.stringify({ email: normalizedEmail, department: deptName }),
+        body: JSON.stringify({ email: normalizedEmail, department: deptToCall }),
       });
       if (!res.ok) throw new Error(`Call failed: ${res.status}`);
       const data = await res.json();
@@ -308,14 +311,14 @@ export function UserDashboard() {
         queuePosition: data.queue_position,
         waitSeconds: data.wait_seconds,
         waitMessage: data.wait_message,
-        department: deptName,
+        department: deptToCall,
       });
       setPhase('in-queue');
     } catch (err) {
       setError(err.message);
       setPhase('error');
     }
-  }, [normalizedEmail]);
+  }, [normalizedEmail, selectedDepartment]);
 
   const resetAll = useCallback(() => {
     setPhase('departments');
@@ -371,6 +374,9 @@ export function UserDashboard() {
           <p className="ivr-detail-text" style={{ marginBottom: 0 }}>
             Select the team that can best help you
           </p>
+          <p className="ivr-detail-text" style={{ marginTop: '0.35rem', fontSize: '0.9rem' }}>
+            Stay on this screen to receive callback popups. Start a new call only when you tap call.
+          </p>
         </div>
 
         <div className="dept-grid">
@@ -378,6 +384,8 @@ export function UserDashboard() {
             <div
               key={dept.name}
               className="dept-card glass-card"
+              onClick={() => setSelectedDepartment(dept.name)}
+              style={{ borderColor: selectedDepartment === dept.name ? 'var(--accent-cyan)' : undefined }}
               id={`dept-${dept.name.replace(/\s+/g, '-').toLowerCase()}`}
             >
               <div className="dept-card-icon">{dept.icon}</div>
@@ -386,15 +394,26 @@ export function UserDashboard() {
               <button
                 className="btn btn-primary"
                 style={{ width: '100%', justifyContent: 'center', marginTop: '0.25rem' }}
-                onClick={() => handleCallDepartment(dept.name)}
+                onClick={(e) => { e.stopPropagation(); setSelectedDepartment(dept.name); }}
               >
-                📞 Tap to Call
+                {selectedDepartment === dept.name ? 'Selected' : 'Select'}
               </button>
             </div>
           ))}
         </div>
 
         <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+          <button
+            className="btn btn-primary"
+            style={{ justifyContent: 'center', minWidth: '260px' }}
+            disabled={!selectedDepartment}
+            onClick={() => handleCallDepartment(selectedDepartment)}
+          >
+            {selectedDepartment ? `Call ${selectedDepartment}` : 'Select a Department First'}
+          </button>
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
           <button
             className="btn btn-ghost"
             onClick={() => { setPhase('email'); setEmail(''); setUserId(null); localStorage.removeItem('cc_user_email'); }}
