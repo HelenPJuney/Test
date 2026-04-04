@@ -118,10 +118,12 @@ function InQueueView({ sessionData, onEnd, onConnected }) {
   }, [room, agentConnected]);
 
   const handleEndCall = useCallback(() => {
-    fetch(`${API}/cc/call/${sessionData.sessionId}`, {
-      method: 'DELETE',
-      headers: { 'ngrok-skip-browser-warning': '1' },
-    }).catch(() => {});
+    if (sessionData.sessionId) {
+      fetch(`${API}/cc/call/${sessionData.sessionId}`, {
+        method: 'DELETE',
+        headers: { 'ngrok-skip-browser-warning': '1' },
+      }).catch(() => {});
+    }
     room.disconnect();
     onEnd();
   }, [room, sessionData.sessionId, onEnd]);

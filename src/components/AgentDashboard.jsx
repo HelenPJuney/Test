@@ -3,6 +3,7 @@ import {
   LiveKitRoom,
   RoomAudioRenderer,
   useRoomContext,
+  useParticipants,
 } from '@livekit/components-react';
 
 const API = import.meta.env.VITE_BACKEND_URL || '';
@@ -24,8 +25,9 @@ const DEPT_OPTIONS = [
    ═══════════════════════════════════════════════════════════════════════════════ */
 function ActiveCallView({ callInfo, onEndCall }) {
   const room = useRoomContext();
+  const participants = useParticipants();
   const isOutbound = callInfo.sessionId && callInfo.sessionId.startsWith('outbound-');
-  const participantCount = room.participants ? Array.from(room.participants.values()).length : 0;
+  const participantCount = participants.length;
 
   const handleEnd = useCallback((noAnswer = false) => {
     room.disconnect();
@@ -236,6 +238,7 @@ export function AgentDashboard() {
   const wsRef = useRef(null);
   const pollTimerRef = useRef(null);
   const agentPollTimerRef = useRef(null);
+  const endingSessionRef = useRef('');
   const agentIdentityRef = useRef(''); // ← always up-to-date, avoids stale closure in WS handler
 
   // Keep ref in sync with state
@@ -428,6 +431,7 @@ export function AgentDashboard() {
         userEmail: data.user_email,
         department,
       });
+      endingSessionRef.current = '';
       setPhase('in-call');
     } catch (err) {
       console.error('Accept call error:', err);
@@ -436,9 +440,12 @@ export function AgentDashboard() {
 
   // ── End call ─────────────────────────────────────────────────────────────
   const handleEndCall = useCallback(async (isNoAnswer = false) => {
+    const currentSessionId = callInfo.sessionId || '';
+    if (currentSessionId && endingSessionRef.current === currentSessionId) return;
+    endingSessionRef.current = currentSessionId;
     try {
-      if (callInfo.sessionId?.startsWith('outbound-')) {
-        const outboundId = parseInt(callInfo.sessionId.replace('outbound-', ''), 10);
+      if (currentSessionId?.startsWith('outbound-')) {
+        const outboundId = parseInt(currentSessionId.replace('outbound-', ''), 10);
         const endpoint = isNoAnswer ? 'no-answer' : 'complete';
         const payload = isNoAnswer
           ? {
@@ -462,7 +469,7 @@ export function AgentDashboard() {
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
           body: JSON.stringify({
             agent_identity: agentIdentity,
-            session_id: callInfo.sessionId,
+            session_id: currentSessionId,
           }),
         });
       }
@@ -495,12 +502,13 @@ export function AgentDashboard() {
         userEmail: ob.user_email,
         department: ob.department,
       });
+      endingSessionRef.current = '';
       setOutboundPopup(null);
       setPhase('in-call');
     } catch (err) {
       console.error('Outbound accept error:', err);
     }
-  }, [agentIdentity]);
+  }, [agentIdentity, effectiveAPI]);
 
   // ── Decline outbound ─────────────────────────────────────────────────────
   const handleDeclineOutbound = useCallback(async (ob, reason, snoozeMinutes) => {
