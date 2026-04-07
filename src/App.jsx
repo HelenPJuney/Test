@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserDashboard } from './components/UserDashboard';
 import { AgentDashboard } from './components/AgentDashboard';
+import { AdminDashboard } from './components/AdminDashboard';
 import { CallerView as AiAssistView } from './components/CallerView';
 
 /**
@@ -45,6 +46,13 @@ function App() {
           >
             AI Assistant
           </button>
+          <button
+            id="tab-admin"
+            className={`nav-tab ${tab === 'admin' ? 'active' : ''}`}
+            onClick={() => setTab('admin')}
+          >
+            Admin
+          </button>
         </div>
 
         <div className="nav-status">
@@ -58,6 +66,7 @@ function App() {
         {tab === 'caller' && <UserDashboard />}
         {tab === 'agent' && <AgentDashboard />}
         {tab === 'ai-assist' && <AiAssistView />}
+        {tab === 'admin' && <AdminDashboard />}
       </main>
     </div>
   );

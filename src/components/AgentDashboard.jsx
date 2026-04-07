@@ -242,14 +242,6 @@ export function AgentDashboard() {
   const [outboundPopup, setOutboundPopup] = useState(null);
   const [snoozeUntil, setSnoozeUntil] = useState(null);
 
-  // Admin config panel
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [adminConfig, setAdminConfig] = useState({
-    work_start: '09:00', work_end: '18:00',
-    work_days: '0,1,2,3,4,5', timezone: 'Asia/Kolkata',
-    avg_resolution_seconds: 300,
-  });
-  const [adminSaved, setAdminSaved] = useState(false);
 
   // In-call state
   const [callToken, setCallToken] = useState(null);
@@ -604,36 +596,6 @@ export function AgentDashboard() {
     return () => clearInterval(iv);
   }, [phase, department, effectiveAPI, maybeShowOutboundFromHistory]);
 
-  // ── Admin config ─────────────────────────────────────────────────────────
-  const loadAdminConfig = useCallback(async () => {
-    try {
-      const res = await fetch(`${effectiveAPI}/cc/admin/config`, { headers: { 'ngrok-skip-browser-warning': '1' } });
-      if (res.ok) {
-        const data = await res.json();
-        const c = data.config || {};
-        setAdminConfig({
-          work_start: c.work_start || '09:00',
-          work_end: c.work_end || '18:00',
-          work_days: c.work_days || '0,1,2,3,4,5',
-          timezone: c.timezone || 'Asia/Kolkata',
-          avg_resolution_seconds: parseInt(c.avg_resolution_seconds || '300', 10),
-        });
-      }
-    } catch (e) { /* ignore */ }
-  }, [effectiveAPI]);
-
-  const saveAdminConfig = useCallback(async () => {
-    try {
-      await fetch(`${effectiveAPI}/cc/admin/business-hours`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
-        body: JSON.stringify(adminConfig),
-      });
-      setAdminSaved(true);
-      setTimeout(() => setAdminSaved(false), 2000);
-    } catch (e) { console.error('Admin save error:', e); }
-  }, [adminConfig, effectiveAPI]);
-
   // ── Resume outbound ──────────────────────────────────────────────────────
   const handleResume = useCallback(async () => {
     try {
@@ -757,52 +719,6 @@ export function AgentDashboard() {
 
       {/* ── Snooze Widget ───────────────────────────────────────────────── */}
       <SnoozeWidget snoozeUntil={snoozeUntil} onResume={handleResume} />
-
-      {/* ── Admin Config Panel ──────────────────────────────────────────── */}
-      <div className="glass-card-static" style={{ marginBottom: '1.25rem' }}>
-        <div className="queue-dashboard-title" style={{ cursor: 'pointer' }} onClick={() => { setShowAdmin(v => !v); if (!showAdmin) loadAdminConfig(); }}>
-          <h3>⚙️ Admin Settings</h3>
-          <span className="queue-count-badge">{showAdmin ? '▲ Hide' : '▼ Show'}</span>
-        </div>
-        {showAdmin && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <label style={{ flex: 1, minWidth: '120px' }}>
-                <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Work Start</span>
-                <input type="time" className="agent-name-input" value={adminConfig.work_start}
-                  onChange={e => setAdminConfig(c => ({ ...c, work_start: e.target.value }))} />
-              </label>
-              <label style={{ flex: 1, minWidth: '120px' }}>
-                <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Work End</span>
-                <input type="time" className="agent-name-input" value={adminConfig.work_end}
-                  onChange={e => setAdminConfig(c => ({ ...c, work_end: e.target.value }))} />
-              </label>
-            </div>
-            <label>
-              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
-                Work Days (0=Mon … 6=Sun, comma-separated)
-              </span>
-              <input type="text" className="agent-name-input" value={adminConfig.work_days}
-                onChange={e => setAdminConfig(c => ({ ...c, work_days: e.target.value }))} placeholder="0,1,2,3,4,5" />
-            </label>
-            <label>
-              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Timezone</span>
-              <input type="text" className="agent-name-input" value={adminConfig.timezone}
-                onChange={e => setAdminConfig(c => ({ ...c, timezone: e.target.value }))} placeholder="Asia/Kolkata" />
-            </label>
-            <label>
-              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
-                Avg Call Resolution Time (seconds) — used for queue wait estimates
-              </span>
-              <input type="number" className="agent-name-input" value={adminConfig.avg_resolution_seconds} min={30}
-                onChange={e => setAdminConfig(c => ({ ...c, avg_resolution_seconds: parseInt(e.target.value, 10) || 300 }))} />
-            </label>
-            <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={saveAdminConfig}>
-              {adminSaved ? '✓ Saved!' : 'Save Settings'}
-            </button>
-          </div>
-        )}
-      </div>
 
       {/* ── Tab Nav ─────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
