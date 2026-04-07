@@ -16,9 +16,6 @@ export function AdminDashboard() {
   const [holidaySaved, setHolidaySaved] = useState(false);
   const [bhStatus, setBhStatus] = useState(null);
 
-  // ── Queue TTS ─────────────────────────────────────────────────────────────
-  const [tts, setTts] = useState({ tts_interval_seconds: 10, tts_queue_message: 'You are at position {pos} in the queue. Estimated wait: {wait} minutes.' });
-  const [ttsSaved, setTtsSaved] = useState(false);
 
   // ── Email (Gmail only) ────────────────────────────────────────────────────
   const [emailUser, setEmailUser] = useState('');
@@ -40,7 +37,6 @@ export function AdminDashboard() {
         if (cfgRes.ok) {
           const d = (await cfgRes.json()).config || {};
           setBh({ work_start: d.work_start || '09:00', work_end: d.work_end || '18:00', work_days: d.work_days || '0,1,2,3,4,5', timezone: d.timezone || 'Asia/Kolkata', avg_resolution_seconds: parseInt(d.avg_resolution_seconds || '300', 10) });
-          setTts({ tts_interval_seconds: parseInt(d.tts_interval_seconds || '60', 10), tts_queue_message: d.tts_queue_message || 'You are at position {pos} in the queue. Estimated wait: {wait} minutes.' });
         }
         if (emailRes.ok) {
           const d = await emailRes.json();
@@ -68,15 +64,6 @@ export function AdminDashboard() {
     } catch (e) { /* ignore */ }
   }, [bh, effectiveAPI]);
 
-  const saveTts = useCallback(async () => {
-    try {
-      await Promise.all([
-        fetch(`${effectiveAPI}/cc/admin/config`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' }, body: JSON.stringify({ key: 'tts_interval_seconds', value: String(tts.tts_interval_seconds) }) }),
-        fetch(`${effectiveAPI}/cc/admin/config`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' }, body: JSON.stringify({ key: 'tts_queue_message', value: tts.tts_queue_message }) }),
-      ]);
-      setTtsSaved(true); setTimeout(() => setTtsSaved(false), 2000);
-    } catch (e) { /* ignore */ }
-  }, [tts, effectiveAPI]);
 
   const saveEmail = useCallback(async () => {
     if (!emailUser) { setEmailMsg('Email is required.'); return; }
@@ -173,29 +160,19 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      {/* Queue TTS */}
+      {/* Queue Announcements */}
       <div className="glass-card-static" style={{ marginBottom: '1.5rem' }}>
         <div className="queue-dashboard-title"><h3>Queue Announcements</h3></div>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.75rem', marginBottom: 0 }}>
-          What callers hear while waiting. Repeats on the set interval.
+          Callers will hear: <em>"You are at position 1, your wait time is <strong style={{color:'var(--accent-cyan)'}}>{bh.avg_resolution_seconds/60}</strong> minutes."</em>
         </p>
         <label style={{ marginTop: '0.75rem', display: 'block' }}>
-          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
-            Wait Time Message — use <code style={{ color: 'var(--accent-cyan)' }}>{'{pos}'}</code> for position, <code style={{ color: 'var(--accent-cyan)' }}>{'{wait}'}</code> for minutes
-          </span>
-          <input type="text" className="agent-name-input" value={tts.tts_queue_message}
-            onChange={e => setTts(t => ({ ...t, tts_queue_message: e.target.value }))}
-            placeholder="Your wait time is {wait} minutes. You are number {pos}." />
+          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Wait time per caller (minutes)</span>
+          <input type="number" className="agent-name-input" value={bh.avg_resolution_seconds / 60} min={1}
+            onChange={e => setBh(b => ({ ...b, avg_resolution_seconds: (parseInt(e.target.value, 10) || 1) * 60 }))} />
         </label>
-        <label style={{ marginTop: '0.75rem', display: 'block' }}>
-          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
-            Repeat every (seconds)
-          </span>
-          <input type="number" className="agent-name-input" value={tts.tts_interval_seconds} min={5} max={600}
-            onChange={e => setTts(t => ({ ...t, tts_interval_seconds: parseInt(e.target.value, 10) || 10 }))} />
-        </label>
-        <button className="btn btn-primary" style={{ marginTop: '1rem', justifyContent: 'center', width: '100%' }} onClick={saveTts}>
-          {ttsSaved ? '✓ Saved!' : 'Save Queue Settings'}
+        <button className="btn btn-primary" style={{ marginTop: '1rem', justifyContent: 'center', width: '100%' }} onClick={saveBH}>
+          {bhSaved ? '✓ Saved!' : 'Save'}
         </button>
       </div>
 
