@@ -17,7 +17,7 @@ export function AdminDashboard() {
   const [bhStatus, setBhStatus] = useState(null);
 
   // ── Queue TTS ─────────────────────────────────────────────────────────────
-  const [tts, setTts] = useState({ tts_interval_seconds: 60, tts_queue_message: 'You are at position {pos} in the queue. Estimated wait: {wait} minutes.' });
+  const [tts, setTts] = useState({ tts_interval_seconds: 10, tts_queue_message: 'You are at position {pos} in the queue. Estimated wait: {wait} minutes.' });
   const [ttsSaved, setTtsSaved] = useState(false);
 
   // ── Email (Gmail only) ────────────────────────────────────────────────────
@@ -176,20 +176,23 @@ export function AdminDashboard() {
       {/* Queue TTS */}
       <div className="glass-card-static" style={{ marginBottom: '1.5rem' }}>
         <div className="queue-dashboard-title"><h3>Queue Announcements</h3></div>
-        <label style={{ marginTop: '1rem', display: 'block' }}>
-          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
-            Announcement Interval (seconds) — how often callers hear their position
-          </span>
-          <input type="number" className="agent-name-input" value={tts.tts_interval_seconds} min={30} max={600}
-            onChange={e => setTts(t => ({ ...t, tts_interval_seconds: parseInt(e.target.value, 10) || 60 }))} />
-        </label>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.75rem', marginBottom: 0 }}>
+          What callers hear while waiting. Repeats on the set interval.
+        </p>
         <label style={{ marginTop: '0.75rem', display: 'block' }}>
           <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
-            Queue Message — use <code style={{ color: 'var(--accent-cyan)' }}>{'{pos}'}</code> for position, <code style={{ color: 'var(--accent-cyan)' }}>{'{wait}'}</code> for minutes
+            Wait Time Message — use <code style={{ color: 'var(--accent-cyan)' }}>{'{pos}'}</code> for position, <code style={{ color: 'var(--accent-cyan)' }}>{'{wait}'}</code> for minutes
           </span>
           <input type="text" className="agent-name-input" value={tts.tts_queue_message}
             onChange={e => setTts(t => ({ ...t, tts_queue_message: e.target.value }))}
-            placeholder="You are at position {pos}. Wait: {wait} minutes." />
+            placeholder="Your wait time is {wait} minutes. You are number {pos}." />
+        </label>
+        <label style={{ marginTop: '0.75rem', display: 'block' }}>
+          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
+            Repeat every (seconds)
+          </span>
+          <input type="number" className="agent-name-input" value={tts.tts_interval_seconds} min={5} max={600}
+            onChange={e => setTts(t => ({ ...t, tts_interval_seconds: parseInt(e.target.value, 10) || 10 }))} />
         </label>
         <button className="btn btn-primary" style={{ marginTop: '1rem', justifyContent: 'center', width: '100%' }} onClick={saveTts}>
           {ttsSaved ? '✓ Saved!' : 'Save Queue Settings'}
