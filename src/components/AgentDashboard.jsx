@@ -8,7 +8,7 @@ import {
 
 const API = import.meta.env.VITE_BACKEND_URL || '';
 const WS_URL = import.meta.env.VITE_BACKEND_WS || '';
-const OUTBOUND_WAIT_SECONDS = 25;
+const OUTBOUND_WAIT_SECONDS = 20;
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    Department options
@@ -93,27 +93,42 @@ function ActiveCallView({ callInfo, onEndCall }) {
 /* ═══════════════════════════════════════════════════════════════════════════════
    OutboundPopup — countdown popup for outbound callbacks
    ═══════════════════════════════════════════════════════════════════════════════ */
+const DECLINE_REASONS = [
+  'Feeling unwell',
+  'Need a break',
+  'In a meeting',
+  'Technical issue',
+  'On another call',
+];
+
 function OutboundPopup({ outbound, onAccept, onDecline }) {
   const [countdown, setCountdown] = useState(outbound.countdown || OUTBOUND_WAIT_SECONDS);
   const [showDeclineForm, setShowDeclineForm] = useState(false);
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState(DECLINE_REASONS[0]);
   const [snoozeMinutes, setSnoozeMinutes] = useState(10);
+  const autoFiredRef = useRef(false);
 
   useEffect(() => {
     if (countdown <= 0) {
-      onDecline(outbound, 'missed_popup', 0); // instantly auto-dismiss without snooze
+      // Auto-execute: start calling the missed customer automatically
+      if (!autoFiredRef.current) {
+        autoFiredRef.current = true;
+        onAccept(outbound);
+      }
       return;
     }
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
-  }, [countdown, outbound, onDecline]);
+  }, [countdown, outbound, onAccept]);
 
   return (
     <div className="outbound-popup">
-      <div className="outbound-countdown">⏱️ {countdown}s</div>
+      <div className="outbound-countdown" style={{ color: countdown <= 5 ? 'var(--accent-rose, #f43f5e)' : undefined }}>
+        ⏱️ {countdown}s
+      </div>
       <div className="outbound-label">📤 OUTBOUND CALLBACK</div>
       <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.75rem', position: 'relative' }}>
-        Customer left queue. Callback available.
+        {countdown > 0 ? `Auto-calling in ${countdown}s if no action.` : 'Auto-calling now...'}
       </p>
       <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '0.75rem', borderRadius: '0.5rem', marginBottom: '1rem', borderLeft: '3px solid var(--accent-cyan)' }}>
         <p style={{ color: 'var(--text-primary)', fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.25rem 0' }}>
@@ -135,15 +150,15 @@ function OutboundPopup({ outbound, onAccept, onDecline }) {
         </div>
       ) : (
         <div className="decline-form">
-          <label>Reason</label>
-          <input
-            type="text"
-            className="agent-name-input"
-            placeholder="e.g. On break"
+          <label>Justification (logged for productivity)</label>
+          <select
+            className="decline-select"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             style={{ marginBottom: '0.75rem' }}
-          />
+          >
+            {DECLINE_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
           <label>Ignore outbound calls for</label>
           <select
             className="decline-select"
@@ -153,6 +168,7 @@ function OutboundPopup({ outbound, onAccept, onDecline }) {
             <option value={5}>5 minutes</option>
             <option value={10}>10 minutes</option>
             <option value={15}>15 minutes</option>
+            <option value={30}>30 minutes</option>
           </select>
           <button
             className="btn btn-danger"
@@ -225,6 +241,15 @@ export function AgentDashboard() {
   const [deptAgents, setDeptAgents] = useState([]);
   const [outboundPopup, setOutboundPopup] = useState(null);
   const [snoozeUntil, setSnoozeUntil] = useState(null);
+
+  // Admin config panel
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [adminConfig, setAdminConfig] = useState({
+    work_start: '09:00', work_end: '18:00',
+    work_days: '0,1,2,3,4,5', timezone: 'Asia/Kolkata',
+    avg_resolution_seconds: 300,
+  });
+  const [adminSaved, setAdminSaved] = useState(false);
 
   // In-call state
   const [callToken, setCallToken] = useState(null);
@@ -579,6 +604,36 @@ export function AgentDashboard() {
     return () => clearInterval(iv);
   }, [phase, department, effectiveAPI, maybeShowOutboundFromHistory]);
 
+  // ── Admin config ─────────────────────────────────────────────────────────
+  const loadAdminConfig = useCallback(async () => {
+    try {
+      const res = await fetch(`${effectiveAPI}/cc/admin/config`, { headers: { 'ngrok-skip-browser-warning': '1' } });
+      if (res.ok) {
+        const data = await res.json();
+        const c = data.config || {};
+        setAdminConfig({
+          work_start: c.work_start || '09:00',
+          work_end: c.work_end || '18:00',
+          work_days: c.work_days || '0,1,2,3,4,5',
+          timezone: c.timezone || 'Asia/Kolkata',
+          avg_resolution_seconds: parseInt(c.avg_resolution_seconds || '300', 10),
+        });
+      }
+    } catch (e) { /* ignore */ }
+  }, [effectiveAPI]);
+
+  const saveAdminConfig = useCallback(async () => {
+    try {
+      await fetch(`${effectiveAPI}/cc/admin/business-hours`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
+        body: JSON.stringify(adminConfig),
+      });
+      setAdminSaved(true);
+      setTimeout(() => setAdminSaved(false), 2000);
+    } catch (e) { console.error('Admin save error:', e); }
+  }, [adminConfig, effectiveAPI]);
+
   // ── Resume outbound ──────────────────────────────────────────────────────
   const handleResume = useCallback(async () => {
     try {
@@ -702,6 +757,52 @@ export function AgentDashboard() {
 
       {/* ── Snooze Widget ───────────────────────────────────────────────── */}
       <SnoozeWidget snoozeUntil={snoozeUntil} onResume={handleResume} />
+
+      {/* ── Admin Config Panel ──────────────────────────────────────────── */}
+      <div className="glass-card-static" style={{ marginBottom: '1.25rem' }}>
+        <div className="queue-dashboard-title" style={{ cursor: 'pointer' }} onClick={() => { setShowAdmin(v => !v); if (!showAdmin) loadAdminConfig(); }}>
+          <h3>⚙️ Admin Settings</h3>
+          <span className="queue-count-badge">{showAdmin ? '▲ Hide' : '▼ Show'}</span>
+        </div>
+        {showAdmin && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <label style={{ flex: 1, minWidth: '120px' }}>
+                <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Work Start</span>
+                <input type="time" className="agent-name-input" value={adminConfig.work_start}
+                  onChange={e => setAdminConfig(c => ({ ...c, work_start: e.target.value }))} />
+              </label>
+              <label style={{ flex: 1, minWidth: '120px' }}>
+                <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Work End</span>
+                <input type="time" className="agent-name-input" value={adminConfig.work_end}
+                  onChange={e => setAdminConfig(c => ({ ...c, work_end: e.target.value }))} />
+              </label>
+            </div>
+            <label>
+              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
+                Work Days (0=Mon … 6=Sun, comma-separated)
+              </span>
+              <input type="text" className="agent-name-input" value={adminConfig.work_days}
+                onChange={e => setAdminConfig(c => ({ ...c, work_days: e.target.value }))} placeholder="0,1,2,3,4,5" />
+            </label>
+            <label>
+              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Timezone</span>
+              <input type="text" className="agent-name-input" value={adminConfig.timezone}
+                onChange={e => setAdminConfig(c => ({ ...c, timezone: e.target.value }))} placeholder="Asia/Kolkata" />
+            </label>
+            <label>
+              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
+                Avg Call Resolution Time (seconds) — used for queue wait estimates
+              </span>
+              <input type="number" className="agent-name-input" value={adminConfig.avg_resolution_seconds} min={30}
+                onChange={e => setAdminConfig(c => ({ ...c, avg_resolution_seconds: parseInt(e.target.value, 10) || 300 }))} />
+            </label>
+            <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={saveAdminConfig}>
+              {adminSaved ? '✓ Saved!' : 'Save Settings'}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* ── Tab Nav ─────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
