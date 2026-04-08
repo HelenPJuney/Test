@@ -330,8 +330,15 @@ function IvrFlow({ onRouted, onEnd }) {
 function ActiveRoomView({ routingResult, onEnd }) {
   const room = useRoomContext();
   const participants = useParticipants();
-  const agentConnected = participants.some(p => p.identity && p.identity.includes('helen-receiver'));
+  const agentConnected = participants.some(p => p.identity && p.identity.startsWith('agent-'));
+  const hadAgentRef = useRef(false);
   const activeAudioRef = useRef(null);
+
+  // Auto-disconnect when agent leaves after being connected
+  useEffect(() => {
+    if (agentConnected) { hadAgentRef.current = true; return; }
+    if (hadAgentRef.current) { room.disconnect(); onEnd(); }
+  }, [agentConnected, room, onEnd]);
 
   // Stop any playing TTS audio as soon as the agent connects
   useEffect(() => {

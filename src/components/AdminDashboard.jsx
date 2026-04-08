@@ -10,6 +10,7 @@ export function AdminDashboard() {
   // ── Business Hours ────────────────────────────────────────────────────────
   const [bh, setBh] = useState({ work_start: '09:00', work_end: '18:00', work_days: '0,1,2,3,4,5', timezone: 'Asia/Kolkata', avg_resolution_seconds: 300 });
   const [bhSaved, setBhSaved] = useState(false);
+  const [bhMsg, setBhMsg] = useState('');
 
   // ── Holiday ───────────────────────────────────────────────────────────────
   const [holiday, setHoliday] = useState({ message: '', until: '' });
@@ -57,11 +58,12 @@ export function AdminDashboard() {
 
   const saveBH = useCallback(async () => {
     try {
-      await fetch(`${effectiveAPI}/cc/admin/business-hours`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' }, body: JSON.stringify(bh) });
-      setBhSaved(true); setTimeout(() => setBhSaved(false), 2000);
+      const res = await fetch(`${effectiveAPI}/cc/admin/business-hours`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' }, body: JSON.stringify(bh) });
+      if (!res.ok) { setBhMsg(`Save failed (${res.status}) — check Backend URL above`); return; }
+      setBhSaved(true); setBhMsg(''); setTimeout(() => setBhSaved(false), 2000);
       const s = await fetch(`${effectiveAPI}/cc/business-hours`, { headers: { 'ngrok-skip-browser-warning': '1' } });
       if (s.ok) setBhStatus(await s.json());
-    } catch (e) { /* ignore */ }
+    } catch (e) { setBhMsg('Cannot reach backend — set the Backend URL above first'); }
   }, [bh, effectiveAPI]);
 
 
@@ -135,6 +137,7 @@ export function AdminDashboard() {
           <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>Avg Call Resolution Time (seconds)</span>
           <input type="number" className="agent-name-input" value={bh.avg_resolution_seconds} min={30} onChange={e => setBh(b => ({ ...b, avg_resolution_seconds: parseInt(e.target.value, 10) || 300 }))} />
         </label>
+        {bhMsg && <p style={{ fontSize: '0.8rem', color: '#f43f5e', marginTop: '0.5rem' }}>{bhMsg}</p>}
         <button className="btn btn-primary" style={{ marginTop: '1rem', justifyContent: 'center', width: '100%' }} onClick={saveBH}>
           {bhSaved ? '✓ Saved!' : 'Save Business Hours'}
         </button>
