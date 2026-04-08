@@ -201,6 +201,7 @@ export function UserDashboard() {
   const [selectedDepartment, setSelectedDepartment] = useState('');
   const [sessionData, setSessionData] = useState({});
   const [offlineMsg, setOfflineMsg] = useState('');
+  const [offlineDays, setOfflineDays] = useState([]);
   const [error, setError] = useState('');
   const [outboundCallback, setOutboundCallback] = useState(null);
   const normalizedEmail = email.trim().toLowerCase();
@@ -220,6 +221,8 @@ export function UserDashboard() {
           const eventEmail = (data.user_email || '').trim().toLowerCase();
           if (data.type === 'caller_pickup' && eventEmail === normalizedEmail) {
             setOutboundCallback({ room: data.room });
+          } else if (data.type === 'outbound_cancelled' && eventEmail === normalizedEmail) {
+            setOutboundCallback(null);
           }
         } catch (e) { /* ignore */ }
       };
@@ -317,6 +320,7 @@ export function UserDashboard() {
 
       if (data.rejected) {
         setOfflineMsg(data.offline_message || 'We are currently closed.');
+        setOfflineDays(data.work_days_names || []);
         setPhase('offline');
         return;
       }
@@ -468,6 +472,11 @@ export function UserDashboard() {
           <div className="offline-icon">🌙</div>
           <h2>We're Currently Closed</h2>
           <p>{offlineMsg}</p>
+          {offlineDays.length > 0 && (
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+              Working days: {offlineDays.join(', ')}
+            </p>
+          )}
           <button className="btn btn-primary" onClick={resetAll} style={{ marginTop: '2rem' }}>
             ← Back to Departments
           </button>
