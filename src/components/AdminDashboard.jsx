@@ -96,10 +96,17 @@ export function AdminDashboard() {
       <div className="agent-header" style={{ marginBottom: '1.5rem' }}>
         <h2>Admin Console</h2>
         {bhStatus && (
-          <span className={`agent-status-badge ${bhStatus.is_open ? 'badge-online' : 'badge-offline'}`}>
-            <span className="status-dot" style={{ background: bhStatus.is_open ? 'var(--accent-emerald)' : 'var(--text-muted)' }} />
-            {bhStatus.is_open ? 'System Open' : 'System Closed'}
-          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.3rem' }}>
+            <span className={`agent-status-badge ${bhStatus.is_open ? 'badge-online' : 'badge-offline'}`}>
+              <span className="status-dot" style={{ background: bhStatus.is_open ? 'var(--accent-emerald)' : 'var(--text-muted)' }} />
+              {bhStatus.is_open ? 'System Open' : 'System Closed'}
+            </span>
+            {bhStatus.work_days_names && (
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                Active: {bhStatus.work_days_names.join(', ')}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
